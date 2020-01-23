@@ -1,4 +1,10 @@
+import numpy as np
+import seaborn as sns
+
 import macroscore
+from matplotlib import pyplot as plt, rcParams
+from sklearn.metrics import auc, roc_curve, accuracy_score
+
 
 def clean_data_local():
     # Get required fields of the data-set (fields not of the Replication Study)
@@ -33,11 +39,21 @@ def clean_data_local():
     # Changing the data-types of some fields so as not to include them in encoding
     data_set = data_set.astype({'Reported P-value (O)': 'float64', 'Pages (O)': 'float64', 'Surprising result (O)': 'float64',
                                 'Exciting result (O)': 'float64', 'N (O)': 'float64', '# Tails (O)': 'float64'})
+    # data_set.to_excel('Psychology/data_set.xlsx')
     return data_set
 
+
 def plot_charts(data):
-    # Plot charts to analyse the data
-    pass
+    # colors = np.where(data['result_label'] == True, 'r', 'k')
+    # data.plot.scatter(x='Institution prestige, 1st author (O)', y='Exciting result (O)', title='MacroScore Dataset', s=5, c=colors)
+    # plt.show()
+
+    # init figure size
+    fig = plt.figure()
+    sns.heatmap(data.corr(), annot=True, fmt=".2f")
+    plt.show()
+    fig.savefig('corr.png')
+
 
 if __name__ == '__main__':
     df = clean_data_local()

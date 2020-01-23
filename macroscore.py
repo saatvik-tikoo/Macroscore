@@ -3,14 +3,10 @@ import csv
 import pandas as pd
 from sklearn import tree
 from sklearn.feature_extraction import DictVectorizer
-from sklearn.metrics import auc, roc_curve, accuracy_score
 from sklearn.naive_bayes import GaussianNB
-from matplotlib import pyplot as plt
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score, GridSearchCV, StratifiedShuffleSplit
+from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.svm import SVC, LinearSVC
-
-import tensorflow as tf
 from tensorflow import keras
 import numpy as np
 
@@ -100,7 +96,7 @@ def clean_data():
     data_set = data_set[: -1]
 
     # Changing the data-types of some fields so as not to include them in encoding
-    data_set = data_set.astype({'Reported P-value (O)': 'float64', 'Pages (O)': 'float64', 'Surprising result (O)': 'float64',
+    data_set = data_set.astype({'Reported P-value (O)': 'float64', 'Pages (O)': 'float64',
                                 'Exciting result (O)': 'float64', 'N (O)': 'float64', '# Tails (O)': 'float64'})
 
     # Do a separate encoding for authors
@@ -128,7 +124,7 @@ def clean_data():
     print("total_false % is=", (total_false / total_val) * 100)
     return data_set
 
-def modelling(df, cross_validation=None):
+def modelling(df):
     X = df.drop(['result_label'], axis=1)
     y = df['result_label']
     skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
@@ -136,7 +132,7 @@ def modelling(df, cross_validation=None):
     gnb = GaussianNB()
     Svc = SVC(random_state=0)
     LSvc = LinearSVC(random_state=0, C=0.01, dual=False)
-    neigh = KNeighborsClassifier(n_neighbors=4, p=2)
+    neigh = KNeighborsClassifier(n_neighbors=5, p=2, weights='uniform')
     clf = tree.DecisionTreeClassifier(criterion='entropy', max_features='auto',
                                       min_samples_leaf=1, min_samples_split=2, min_weight_fraction_leaf=0.0,
                                       random_state=0, splitter='best')
@@ -151,9 +147,15 @@ def modelling(df, cross_validation=None):
         X_train, X_test = X.iloc[train_index], X.iloc[test_index]
         y_train, y_test = y.iloc[train_index], y.iloc[test_index]
         model = keras.Sequential([
-            keras.layers.Dense(128, input_dim=915, activation='sigmoid'),
-            keras.layers.Dense(256, activation='sigmoid'),
-            keras.layers.Dense(128, activation='sigmoid'),
+            # keras.layers.Dense(128, input_dim=913, activation='sigmoid'),
+            # keras.layers.Dense(256, activation='sigmoid'),
+            # keras.layers.Dense(128, activation='sigmoid'),
+            # keras.layers.Dense(1, activation='sigmoid')
+
+            # This one is for only 2 features
+            keras.layers.Dense(32, input_dim=6, activation='sigmoid'),
+            keras.layers.Dense(64, activation='sigmoid'),
+            keras.layers.Dense(32, activation='sigmoid'),
             keras.layers.Dense(1, activation='sigmoid')
         ])
         model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -234,11 +236,35 @@ def modelling_dictvectorize(X_income, y_income):
     print('Accuracy of this model is: %.2f' % (np.mean(acc_arr) * 100))
     print(acc_arr)
 
+def testing_correlations():
+    req_columns = ['P-value (R)', 'Direction (R)', 'Number of studies (O)', 'Institution prestige, 1st author (O)',
+                   'Number of authors (O)', 'Citation count, paper (O)', 'Volume (O)', 'N (O)']
+    data_set = pandas.read_csv('Psychology/rpp_data_updates.csv', encoding='ansi', usecols=req_columns)
+
+    # Add output field and dropping the Replication fields
+    data_set['result_label'] = data_set.apply(lambda row: label_addition(row), axis=1)
+    data_set = data_set.drop(['P-value (R)', 'Direction (R)'], axis=1)
+
+    # Clean fields
+    data_set = data_set.replace(to_replace='X', value=np.nan)
+    data_set = data_set.replace(to_replace=np.nan, value=0)
+
+    # Removing the last row as it is a null row
+    data_set = data_set[: -1]
+
+    # Changing Data Type
+    data_set = data_set.astype({'N (O)': 'float64'})
+
+    print(data_set.shape)
+    modelling(data_set)
 
 if __name__ == '__main__':
     # one hot encoding
-    df = clean_data()
-    modelling(df)
+    # df = clean_data()
+    # modelling(df)
     # dictVectorize encoding
     # X, y = clean_data_dict_vectorize()
     # modelling_dictvectorize(X, y)
+    # Trail tests
+    testing_correlations()
+
