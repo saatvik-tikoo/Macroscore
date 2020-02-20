@@ -1,270 +1,254 @@
+import os
 import pandas
-import csv
-import pandas as pd
-from sklearn import tree
-from sklearn.feature_extraction import DictVectorizer
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.naive_bayes import GaussianNB
-from sklearn.model_selection import train_test_split, StratifiedKFold, cross_val_score
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import SVC, LinearSVC
-from tensorflow import keras
+from sklearn.svm import SVC
 import numpy as np
+from tensorflow import keras
 
-def label_addition(row):
-    try:
-        if 'X' in str(row['P-value (R)']) or str(row['P-value (R)']) == 'nan' or 'significant' in str(row['P-value (R)']):
-            return False
-        if '<' in str(row['P-value (R)']):
-            val = "{0:.4f}".format(float(row['P-value (R)'].split('<')[1].strip()) - float(row['P-value (R)'].split('<')[1].strip()) / 10)
-        elif '>' in str(row['P-value (R)']):
-            val = "{0:.4f}".format(float(row['P-value (R)'].split('>')[1].strip()) + float(row['P-value (R)'].split('>')[1].strip()) / 10)
-        elif '=' in str(row['P-value (R)']):
-            val = row['P-value (R)'].split('=')[1].strip()
-        elif 'not significant' in str(row['P-value (R)']) and row['Direction (R)'] == 'same':
-            return True
-        elif float(row['P-value (R)']) <= 0.05 and row['Direction (R)'] == 'same':
-            return True
-        else:
-            return False
 
-        if float(val) <= 0.05 and row['Direction (R)'] == 'same':
-            return True
-        else:
-            return False
-    except ValueError:
-        return False
+class Macroscore:
+    def __init__(self, label_type, feature_type='all', encoding='oneHot', specify_features=False,
+                 features=None, neural_model=False, fileName=''):
+        # label_type: {'pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant'}
+        self.label_type = label_type
+        # features: {'all', 'common', 'network'}
+        self.feature_type = feature_type
+        # encoding: {'oneHot', 'label', 'DictVectroize'}
+        self.encoding = encoding
+        # if only specific features are required.
+        self.specify_features = specify_features
+        # list of features if specify_features is true
+        self.features = features
+        # true if neural network model is required
+        self.neural_model = neural_model
+        self.fileName = fileName
+        self.df = None
+        self.path_head = '../DataExtraction/WOS/RPPdataConverted'
 
-def clean_pvalue(data_set, prop):
-    for i, row in data_set.iterrows():
-        if 'significant' in str(row[prop]):
-            data_set.at[i, prop] = '1'
-        if '<' in str(row[prop]):
-            data_set.at[i, prop] = "{0:.4f}".format(float(row[prop].split('<')[1].strip()) - float(row[prop].split('<')[1].strip()) / 2)
-        elif '>' in str(row[prop]):
-            data_set.at[i, prop] = "{0:.4f}".format(float(row[prop].split('>')[1].strip()) + float(row[prop].split('>')[1].strip()) / 2)
-        elif '=' in str(row[prop]):
-            data_set.at[i, prop] = row[prop].split('=')[1].strip()
-        elif 'not significant' in str(row[prop]):
-            data_set.at[i, prop] = '0'
-    return data_set
-
-def clean_float_result(data_set, prop):
-    for i, row in data_set.iterrows():
+    def __label_addition__(self, row):
         try:
-            if float(row[prop]):
-                continue
+            if 'X' in str(row['P.value.R']) or str(row['P.value.R']) == 'nan' or 'significant' in str(row['P.value.R']):
+                return 0
+            if '<' in str(row['P.value.R']):
+                val = "{0:.4f}".format(float(row['P.value.R'].split('<')[1].strip()) - float(row['P.value.R'].split('<')[1].strip()) / 10)
+            elif '>' in str(row['P.value.R']):
+                val = "{0:.4f}".format(float(row['P.value.R'].split('>')[1].strip()) + float(row['P.value.R'].split('>')[1].strip()) / 10)
+            elif '=' in str(row['P.value.R']):
+                val = row['P.value.R'].split('=')[1].strip()
+            elif 'not significant' in str(row['P.value.R']) and row['Direction.R'] == 'same':
+                return 1
+            elif float(row['P.value.R']) <= 0.05 and row['Direction.R'] == 'same':
+                return 1
+            else:
+                return 0
+
+            if float(val) <= 0.05 and row['Direction.R'] == 'same':
+                return 1
+            else:
+                return 0
         except ValueError:
-            data_set.at[i, prop] = 0
-    return data_set
+            return 0
 
-def clean_range_values(data_set, prop):
-    for i, row in data_set.iterrows():
-        temp = []
-        if '-' in str(row[prop]):
-            temp = str(row[prop]).split('-')
-            data_set.at[i, prop] = abs(float(temp[0]) - float(temp[0])) + 1
-    return data_set
+    def __clean_pvalue__(self, prop):
+        for i, row in self.df.iterrows():
+            if 'significant' in str(row[prop]):
+                self.df.at[i, prop] = '1'
+            if '<' in str(row[prop]):
+                self.df.at[i, prop] = "{0:.4f}".format(float(row[prop].split('<')[1].strip()) - float(row[prop].split('<')[1].strip()) / 2)
+            elif '>' in str(row[prop]):
+                self.df.at[i, prop] = "{0:.4f}".format(float(row[prop].split('>')[1].strip()) + float(row[prop].split('>')[1].strip()) / 2)
+            elif '=' in str(row[prop]):
+                self.df.at[i, prop] = row[prop].split('=')[1].strip()
+            elif 'not significant' in str(row[prop]):
+                self.df.at[i, prop] = '0'
 
-def clean_data():
-    # Get required fields of the data-set (fields not of the Replication Study)
-    req_columns = ['P-value (R)', 'Direction (R)']
-    remove_columns = ['Study Title (O)', 'Descriptors (O)', 'Description of effect (O)', 'Feasibility (O)',
-                      'Calculated P-value (O)', 'Test statistic (O)', 'Effect size (O)', 'Type of analysis (O)']
-    data_types = ['Integer', 'Range', 'Categorical', 'Decimal', 'Dichotomous', 'Open text']
-    with open("Psychology/rpp_data_codebook.csv") as input_file:
-        reader = csv.reader(input_file)
-        # skip the header
-        next(reader)
-        for line in reader:
-            if '(R)' not in line[0] and line[4] in data_types and line[0] not in remove_columns:
-                req_columns.append(line[0])
-    data_set = pandas.read_csv('Psychology/rpp_data_updates.csv', encoding='ansi', usecols=req_columns)
+    def __clean_float_result__(self, prop):
+        for i, row in self.df.iterrows():
+            try:
+                if float(row[prop]):
+                    continue
+            except ValueError:
+                self.df.at[i, prop] = 0
 
-    # Add output field and dropping the Replication fields
-    data_set['result_label'] = data_set.apply(lambda row: label_addition(row), axis=1)
-    data_set = data_set.drop(['P-value (R)', 'Direction (R)'], axis=1)
+    def __clean_effect_size__(self, prop):
+        for i, row in self.df.iterrows():
+            if '=' in str(row[prop]):
+                self.df.at[i, prop] = float(str(row[prop]).split('=')[1].strip())
 
-    # Clean fields
-    data_set = data_set.replace(to_replace='X', value=np.nan)
-    data_set = data_set.replace(to_replace=np.nan, value=0)
-    data_set = clean_pvalue(data_set, 'Reported P-value (O)')
-    data_set = clean_range_values(data_set, 'Pages (O)')
-    data_set = clean_float_result(data_set, 'Surprising result (O)')
-    data_set = clean_float_result(data_set, 'Exciting result (O)')
+    def __get_baseline__(self):
+        total_true = total_false = total_val = 0
+        for i, row in self.df.iterrows():
+            total_val += 1
+            if row[self.label_type] == 1:
+                total_true += 1
+            else:
+                total_false += 1
+        print("Total rows is= ", total_val)
+        print("total_true % is= ", (total_true / total_val) * 100)
+        print("total_false % is=", (total_false / total_val) * 100)
 
-    # Removing the last row as it is a null row
-    data_set = data_set[: -1]
+    def __clean_data__(self):
+        self.df = self.df.replace(to_replace='X', value=np.nan)
+        self.df = self.df.dropna(subset=['DOI', 'Reported.P.value.O', 'Direction.R', 'Meta.analysis.significant', 'O.within.CI.R'])
+        self.df = self.df.replace(to_replace=np.nan, value=0)
+        self.__clean_pvalue__('Reported.P.value.O')
+        self.__clean_float_result__('Surprising.result.O')
+        self.__clean_float_result__('Exciting.result.O')
+        self.__clean_effect_size__('Effect.size.O')
 
-    # Changing the data-types of some fields so as not to include them in encoding
-    data_set = data_set.astype({'Reported P-value (O)': 'float64', 'Pages (O)': 'float64',
-                                'Exciting result (O)': 'float64', 'N (O)': 'float64', '# Tails (O)': 'float64'})
+        if self.label_type == 'pvalue.label':
+            self.df['pvalue.label'] = self.df.apply(lambda paper: self.__label_addition__(paper), axis=1)
 
-    # Do a separate encoding for authors
-    all_authors = data_set['Authors (O)'].str.split(',', expand=True).stack()
-    temp = pd.get_dummies(all_authors, prefix='g').groupby(level=0).sum()
-    data_set = data_set.drop(['Authors (O)'], axis=1)
-    # temp.to_excel('Psychology/Authors.xlsx')
-    print(temp.shape)
+    def __remove_unusable_features__(self):
+        if self.label_type == 'pvalue.label':
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'Meta.analysis.significant'], axis=1)
+        elif self.label_type == 'O.within.CI.R':
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'Meta.analysis.significant'], axis=1)
+        elif self.label_type == 'Meta.analysis.significant':
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R'], axis=1)
 
-    # Add the encoded authors to the rest of data
-    # data_set.to_excel('Psychology/RawData.xlsx')
-    data_set = pd.get_dummies(data_set, drop_first=True)
-    data_set = pd.concat([temp, data_set], axis=1)
-    # data_set.to_excel('Psychology/JustCreatedFile.xlsx')
-    print(data_set.shape)
+        cols_drop = set(['DOI', '1st.author.O', 'Senior.author.O', 'Authors.O', 'Study.Title.O', 'Unnamed: 0', 'new_feature_301'])
+        cols_total = set(self.df.columns)
+        self.df = self.df.drop(cols_drop.intersection(cols_total), axis=1)
+        # self.df = self.df.replace(to_replace=np.nan, value=0)
+        self.df = self.df.dropna()
+        print('Shape is: ', self.df.shape)
 
-    total_true = total_false = total_val = 0
-    for i, row in data_set.iterrows():
-        total_val += 1
-        if row['result_label']:
-            total_true += 1
+    def __get__common_features__(self):
+        self.__clean_data__()
+
+        self.__get_baseline__()
+
+        # Changing the data-types of some fields so as not to include them in encoding
+        self.df = self.df.astype({'Reported.P.value.O': 'float64', 'Exciting.result.O': 'float64', 'Surprising.result.O': 'float64', 'N.O': 'float64',
+                                  'Effect.size.O': 'float64'})
+        return self.df
+
+    def __get_network_features__(self):
+        print('Initial Shape is: ', self.df.shape)
+        if self.feature_type == 'network':
+            self.__clean_data__()
+            self.__get_baseline__()
+        for i, row in self.df.iterrows():
+            name = row['DOI'].replace('/', '_')
+            print('----- Getting details for ', row['DOI'], '-------')
+
+            # Get Citations related data
+            file_name = self.path_head + '/{}/paper_{}.txt'.format(name, name)
+            all_authors_paper = []
+            if os.path.exists(file_name):
+                df_doi = pandas.read_csv(file_name, sep='\t', lineterminator='\r', encoding="utf-16le", index_col=False,
+                                         quotechar=None, quoting=3, usecols=['AU', 'NR', 'TC'])
+                df_doi = df_doi.dropna()
+                all_authors_paper = df_doi['AU'].str.split(';')[0]
+                self.df.at[i, 'References'] = df_doi['NR'][0]
+                self.df.at[i, 'Citation.count.paper.O'] = df_doi['TC'][0]
+                print('Total references', df_doi['NR'][0])
+                print('Total Citations', df_doi['TC'][0])
+
+            # Get References data: References to same authors
+            file_name = self.path_head + '/{}/citations_{}.txt'.format(name, name)
+            if os.path.exists(file_name):
+                df_doi = pandas.read_csv(file_name, sep='\t', lineterminator='\r', encoding="utf-16le", index_col=False,
+                                         quotechar=None, quoting=3, usecols=['AU'])
+                df_doi = df_doi.dropna()
+                cnt_authors = 0
+                for _, row_internal in df_doi.iterrows():
+                    authors_ref = row_internal['AU'].split(';')
+                    for j in authors_ref:
+                        if j in all_authors_paper:
+                            cnt_authors += 1
+                self.df.at[i, 'References.to.self'] = cnt_authors
+                print('Where they have referred themselves: ', cnt_authors)
+
+            # Get Authors data
+            for author_col in ['1st.author.O', 'Senior.author.O']:
+                folder_name = self.path_head + '/{}/'.format(name)
+                keyword = row[author_col]
+                if os.path.exists(folder_name):
+                    for file in os.listdir(folder_name):
+                        if keyword in file:
+                            df_doi = pandas.read_csv(folder_name + '/' + file, sep='\t', lineterminator='\r', encoding="utf-16le", index_col=False,
+                                                     quotechar=None, quoting=3, usecols=['TC'])
+                            df_doi = df_doi.dropna()
+                            self.df.at[i, author_col + ' papers'] = cnt_authors
+                            print('Number of papers of ' + author_col + ' :', df_doi.shape[0])
+                            res = 0
+                            for _, row_internal in df_doi.iterrows():
+                                res += row_internal['TC']
+                            self.df.at[i, author_col + ' citations.of.all.papers'] = res
+                            print('Number of Citations of  ' + author_col + ' :', res)
+                            break
+
+    def get_data(self):
+        if not self.specify_features:
+            self.df = pandas.read_excel(self.fileName, encoding='ansi')
         else:
-            total_false += 1
-    print("total_true % is= ", (total_true / total_val) * 100)
-    print("total_false % is=", (total_false / total_val) * 100)
-    return data_set
+            self.df = pandas.read_excel(self.fileName, encoding='ansi', usecols=self.features)
 
-def modelling(df):
-    X = df.drop(['result_label'], axis=1)
-    y = df['result_label']
-    skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
+    def get_feature(self):
+        if self.feature_type.lower() == 'common':
+            self.__get__common_features__()
+        elif self.feature_type.lower() == 'network':
+            self.__get_network_features__()
+        elif self.feature_type.lower() == 'all':
+            self.__get__common_features__()
+            self.__get_network_features__()
+        else:
+            print('Wrong features asked: ', self.features)
+            return
+        print('Final Shape is: ', self.df.shape)
+        self.df.to_excel('data/new_data.xlsx')
 
-    gnb = GaussianNB()
-    Svc = SVC(random_state=0)
-    LSvc = LinearSVC(random_state=0, C=0.01, dual=False)
-    neigh = KNeighborsClassifier(n_neighbors=5, p=2, weights='uniform')
-    clf = tree.DecisionTreeClassifier(criterion='entropy', max_features='auto',
-                                      min_samples_leaf=1, min_samples_split=2, min_weight_fraction_leaf=0.0,
-                                      random_state=0, splitter='best')
-    print("Cross Validation Score of NB is: ", np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of SVC is: ", np.mean(cross_val_score(Svc, X, y, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of Linear SVC is: ", np.mean(cross_val_score(LSvc, X, y, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of KNN is: ", np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of Decision Tree is: ", np.mean(cross_val_score(clf, X, y, cv=skf, n_jobs=1)))
+    def modelling(self):
+        self.__remove_unusable_features__()
+        self.__get_baseline__()
+        X = self.df.drop([self.label_type], axis=1)
+        y = self.df[self.label_type]
+        skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
 
-    acc_arr = []
-    for train_index, test_index in skf.split(X, y):
-        X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-        y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-        model = keras.Sequential([
-            # keras.layers.Dense(128, input_dim=913, activation='sigmoid'),
-            # keras.layers.Dense(256, activation='sigmoid'),
-            # keras.layers.Dense(128, activation='sigmoid'),
-            # keras.layers.Dense(1, activation='sigmoid')
+        gnb = GaussianNB()
+        Svc = SVC(kernel='rbf', gamma=1, C=0.1, random_state=0)
+        neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
+        print("Cross Validation Score of NB is: ", np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
+        print("Cross Validation Score of SVC is: ", np.mean(cross_val_score(Svc, X, y, cv=skf, n_jobs=1)))
+        print("Cross Validation Score of KNN is: ", np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
 
-            # This one is for only 2 features
-            keras.layers.Dense(32, input_dim=6, activation='sigmoid'),
-            keras.layers.Dense(64, activation='sigmoid'),
-            keras.layers.Dense(32, activation='sigmoid'),
-            keras.layers.Dense(1, activation='sigmoid')
-        ])
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
-        _, accuracy = model.evaluate(X_test, y_test)
-        acc_arr.append(accuracy)
-    print('Accuracy of this model is: %.2f' % (np.mean(acc_arr) * 100))
-    print(acc_arr)
+        if self.neural_model:
+            acc_arr = []
+            for train_index, test_index in skf.split(X, y):
+                X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+                y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+                model = keras.Sequential([
+                    keras.layers.Dense(1024, input_dim=X.shape[1], activation='sigmoid'),
+                    keras.layers.Dense(512, activation='sigmoid'),
+                    keras.layers.Dense(256, activation='sigmoid'),
+                    keras.layers.Dense(512, activation='sigmoid'),
+                    keras.layers.Dense(128, activation='sigmoid'),
+                    keras.layers.Dense(1, activation='sigmoid')
+                ])
+                model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+                model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
+                _, accuracy = model.evaluate(X_test, y_test)
+                acc_arr.append(accuracy)
+            print('Accuracy of this neural network model is: %.2f' % (np.mean(acc_arr) * 100))
+            print(acc_arr)
 
-def clean_data_dict_vectorize():
-    # Get required fields of the data-set (fields not of the Replication Study)
-    req_columns = ['P-value (R)', 'Direction (R)']
-    remove_columns = ['Study Title (O)', 'Descriptors (O)', 'Description of effect (O)',
-                      'Calculated P-value (O)', 'Test statistic (O)', 'Effect size (O)', 'Type of analysis (O)']
-    data_types = ['Integer', 'Range', 'Categorical', 'Decimal', 'Dichotomous', 'Open text']
-    with open("Psychology/rpp_data_codebook.csv") as input_file:
-        reader = csv.reader(input_file)
-        # skip the header
-        next(reader)
-        for line in reader:
-            if '(R)' not in line[0] and line[4] in data_types and line[0] not in remove_columns:
-                req_columns.append(line[0])
-    data_set = pandas.read_csv('Psychology/rpp_data_updates.csv', encoding='ansi', usecols=req_columns)
-
-    # Add output field
-    data_set['result_label'] = data_set.apply(lambda row: label_addition(row), axis=1)
-    data_set = data_set.drop(['P-value (R)', 'Direction (R)'], axis=1)
-
-    # Clean fields: Reported P-value
-    data_set = data_set.replace(to_replace='X', value=np.nan)
-    data_set = data_set.replace(to_replace=np.nan, value=0)
-    data_set = clean_pvalue(data_set, 'Reported P-value (O)')
-    data_set = clean_range_values(data_set, 'Pages (O)')
-    data_set = clean_float_result(data_set, 'Surprising result (O)')
-    data_set = clean_float_result(data_set, 'Exciting result (O)')
-    data_set = data_set[: -1]
-    data_set = data_set.astype({'Reported P-value (O)': 'float64', 'Pages (O)': 'float64', 'Surprising result (O)': 'float64',
-                                'Exciting result (O)': 'float64', 'N (O)': 'float64', '# Tails (O)': 'float64'})
-    all_authors = data_set['Authors (O)'].str.split(',', expand=True).stack()
-    temp = pd.get_dummies(all_authors, prefix='g').groupby(level=0).sum()
-    data_set = data_set.drop(['Authors (O)'], axis=1)
-    data_set = pd.concat([temp, data_set], axis=1)
-
-    X = data_set.drop(['result_label'], axis=1)
-    y = data_set['result_label']
-
-    X_dict = X.to_dict(orient='records')
-    dv_X = DictVectorizer(sparse=False)
-    X = dv_X.fit_transform(X_dict)
-    # data_set.to_excel('Psychology/JustCreatedFile.xlsx')
-    print(X.shape)
-    return X, y
-
-def modelling_dictvectorize(X_income, y_income):
-    skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
-    gnb = GaussianNB()
-    Svc = SVC(random_state=0)
-    LSvc = LinearSVC(random_state=0, C=0.01, dual=False)
-    neigh = KNeighborsClassifier(n_neighbors=4, p=2)
-    print("Cross Validation Score of NB using DictVector is: ", np.mean(cross_val_score(gnb, X_income, y_income, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of SVC using DictVector is: ", np.mean(cross_val_score(Svc, X_income, y_income, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of Linear SVC using DictVector is: ", np.mean(cross_val_score(LSvc, X_income, y_income, cv=skf, n_jobs=1)))
-    print("Cross Validation Score of KNN using DictVector is: ", np.mean(cross_val_score(neigh, X_income, y_income, cv=skf, n_jobs=1)))
-    acc_arr = []
-    for train_index, test_index in skf.split(X_income, y_income):
-        X_train, X_test = X_income[train_index], X_income[test_index]
-        y_train, y_test = y_income[train_index], y_income[test_index]
-        model = keras.Sequential([
-            keras.layers.Dense(128, input_dim=927, activation='sigmoid'),
-            keras.layers.Dense(256, activation='sigmoid'),
-            keras.layers.Dense(128, activation='sigmoid'),
-            keras.layers.Dense(1, activation='sigmoid')
-        ])
-        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-        model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
-        _, accuracy = model.evaluate(X_test, y_test)
-        acc_arr.append(accuracy)
-    print('Accuracy of this model is: %.2f' % (np.mean(acc_arr) * 100))
-    print(acc_arr)
-
-def testing_correlations():
-    req_columns = ['P-value (R)', 'Direction (R)', 'Number of studies (O)', 'Institution prestige, 1st author (O)',
-                   'Number of authors (O)', 'Citation count, paper (O)', 'Volume (O)', 'N (O)']
-    data_set = pandas.read_csv('Psychology/rpp_data_updates.csv', encoding='ansi', usecols=req_columns)
-
-    # Add output field and dropping the Replication fields
-    data_set['result_label'] = data_set.apply(lambda row: label_addition(row), axis=1)
-    data_set = data_set.drop(['P-value (R)', 'Direction (R)'], axis=1)
-
-    # Clean fields
-    data_set = data_set.replace(to_replace='X', value=np.nan)
-    data_set = data_set.replace(to_replace=np.nan, value=0)
-
-    # Removing the last row as it is a null row
-    data_set = data_set[: -1]
-
-    # Changing Data Type
-    data_set = data_set.astype({'N (O)': 'float64'})
-
-    print(data_set.shape)
-    modelling(data_set)
 
 if __name__ == '__main__':
-    # one hot encoding
-    # df = clean_data()
-    # modelling(df)
-    # dictVectorize encoding
-    # X, y = clean_data_dict_vectorize()
-    # modelling_dictvectorize(X, y)
-    # Trail tests
-    testing_correlations()
+    req_columns = ['Study.Title.O', 'Volume.O', 'Citation.count.paper.O', 'Number.of.Authors.O', 'DOI', 'Citation.Count.1st.author.O',
+                   'Reported.P.value.O', 'Exciting.result.O', 'Surprising.result.O', 'N.O', 'Effect.size.O',
+                   'Institution.prestige.1st.author.O', 'Institution.prestige.senior.author.O', 'O.within.CI.R', 'P.value.R',
+                   'Direction.R', 'Meta.analysis.significant', 'Citation.count.senior.author.O', '1st.author.O',
+                   'Senior.author.O', 'Authors.O']
 
+    # Given an extra function that can abstract the encoding type to Dict-Vectorize and One Hot and Label
+    # mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
+    #                     neural_model=True, fileName='data/RPPdata.xlsx')
+    mscore = Macroscore('pvalue.label', feature_type='all', specify_features=False,
+                        neural_model=True, fileName='data/final_network_data.xlsx')
+    mscore.get_data()
+    # mscore.get_feature()
+    mscore.modelling()
