@@ -1,5 +1,5 @@
-venv/
-extras/
-data/
-.idea/
-__pychache__
+venv
+extras
+data
+.idea
+__pycache__
