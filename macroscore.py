@@ -225,7 +225,6 @@ class Macroscore:
                     keras.layers.Dense(1024, input_dim=X.shape[1], activation='sigmoid'),
                     keras.layers.Dense(512, activation='sigmoid'),
                     keras.layers.Dense(256, activation='sigmoid'),
-                    keras.layers.Dense(512, activation='sigmoid'),
                     keras.layers.Dense(128, activation='sigmoid'),
                     keras.layers.Dense(1, activation='sigmoid')
                 ])
@@ -247,8 +246,10 @@ if __name__ == '__main__':
     # Given an extra function that can abstract the encoding type to Dict-Vectorize and One Hot and Label
     # mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
     #                     neural_model=True, fileName='data/RPPdata.xlsx')
+    # mscore.get_data()
+    # mscore.get_feature()
     mscore = Macroscore('pvalue.label', feature_type='all', specify_features=False,
                         neural_model=True, fileName='data/final_network_data.xlsx')
     mscore.get_data()
-    # mscore.get_feature()
+
     mscore.modelling()

@@ -111,16 +111,23 @@ class Node2Vec:
         model.wv.save_word2vec_format(self.output)
         return
 
-def read_graph():
-    g = nx.read_gpickle('data/citations_network.gpickle')
+def read_graph(file_name):
+    g = nx.read_gpickle(file_name)
     for edge in g.edges():
         g[edge[0]][edge[1]]['weight'] = 1
     return g
 
 
 if __name__ == "__main__":
-    nx_G = read_graph()
-    n2v = Node2Vec(nx_G, p=1, q=1, output='data/node2vec_graph.emb')
-    n2v.preprocess_transition_probs()
-    rand_walk = n2v.simulate_walks()
-    n2v.learn_embeddings(rand_walk)
+    input_file = ['data/citations_network.gpickle', 'data/coauthorship_network.gpickle']
+    output_file = ['data/node2vec_citations.emb', 'data/node2vec_coauthorship.emb']
+    for i in range(len(input_file)):
+        print('----------Getting Features for file ', i + 1, '----------')
+        nx_G = read_graph(input_file[i])
+        n2v = Node2Vec(nx_G, p=2, q=2, output=output_file[i])
+        print('----Preprocessing----')
+        n2v.preprocess_transition_probs()
+        print('----Generate Random Walks----')
+        rand_walk = n2v.simulate_walks()
+        print('----Word2Vec----')
+        n2v.learn_embeddings(rand_walk)

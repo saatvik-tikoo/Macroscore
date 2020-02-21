@@ -18,15 +18,13 @@ class NetworkGraph:
     def citation_graph(self):
         g = nx.Graph()
         nodes = dict()
+        self.df.dropna(subset=['DOI'])
         for idx, row in self.df.iterrows():
             print('Row id: ', idx)
-            if row['DOI'] == row['DOI']:
-                name = row['DOI'].replace('/', '_')
-            else:
-                name = row['DOI']
+            name = row['DOI'].replace('/', '_')
             file_name = self.path_head + '/{}/citations_{}.txt'.format(name, name)
             if os.path.exists(file_name):
-                if name and name == name not in nodes and row['Study.Title.O'] not in nodes.values():
+                if name not in nodes and row['Study.Title.O'] not in nodes.values():
                     g.add_node(name)
                     nodes[name] = row['Study.Title.O']
                 elif row['Study.Title.O'] in nodes.values():
@@ -34,9 +32,11 @@ class NetworkGraph:
                     nodes[name] = row['Study.Title.O']
                     g.remove_node(row('Study.Title.O'))
                     g.add_node(name)
-                df_doi = pd.read_csv(file_name, sep='\t', lineterminator='\r', encoding="utf-16le", index_col=False, quotechar=None, quoting=3)
+                df_doi = pd.read_csv(file_name, sep='\t', lineterminator='\r', encoding="utf-16le",
+                                     index_col=False, quotechar=None, quoting=3, usecols=['DI', 'TI'])
+                df_doi = df_doi.dropna()
                 for i, citation_row in df_doi.iterrows():
-                    if citation_row['DI'] and citation_row['DI'] == citation_row['DI']:
+                    if citation_row['DI']:
                         if citation_row['DI'] not in nodes and citation_row['TI'] not in nodes:
                             g.add_node(citation_row['DI'])
                             nodes[citation_row['DI']] = citation_row['TI']
@@ -47,7 +47,7 @@ class NetworkGraph:
                             g.add_node(citation_row['DI'])
                             g.remove_edge(citation_row['TI'], name)
                         g.add_edge(name, citation_row['DI'])
-                    elif citation_row['TI'] and citation_row['TI'] == citation_row['TI']:
+                    elif citation_row['TI']:
                         if citation_row['TI'] not in nodes:
                             g.add_node(citation_row['TI'])
                             nodes[citation_row['TI']] = citation_row['TI']
@@ -62,17 +62,17 @@ class NetworkGraph:
     def coauthorship_graph(self):
         g = nx.Graph()
         nodes = set()
+        self.df.dropna(subset=['DOI'])
         for idx, row in self.df.iterrows():
             print('Row id: ', idx)
-            if row['DOI'] == row['DOI']:
-                name = row['DOI'].replace('/', '_')
-            else:
-                name = row['DOI']
+            name = row['DOI'].replace('/', '_')
             folder_name = self.path_head + '/{}/'.format(name)
             if os.path.exists(folder_name):
                 for file_name in os.listdir(folder_name):
                     if file_name.startswith("authors_"):
-                        df_doi = pd.read_csv(folder_name + '/' + file_name, sep='\t', lineterminator='\r', encoding="utf-16le", index_col=False, quotechar=None, quoting=3)
+                        df_doi = pd.read_csv(folder_name + '/' + file_name, sep='\t', lineterminator='\r', encoding="utf-16le",
+                                             index_col=False, quotechar=None, quoting=3, usecols=['AU'])
+                        df_doi.dropna()
                         co_authors = dict()
                         for _, authors_row in df_doi.iterrows():
                             cur_auths = authors_row['AU'].split(';')
@@ -116,7 +116,7 @@ class NetworkGraph:
         plt.show()
 
     def addNetworkFeatures(self):
-        with open('data/node2vec_graph.emb', 'r') as f_read:
+        with open('data/node2vec_citations.emb', 'r') as f_read:
             lines = f_read.readlines()
             for row in range(len(lines)):
                 if row > 0:
@@ -125,7 +125,7 @@ class NetworkGraph:
                     # Check for Titles instead of DOIS too
                     if doi[0] == '1':
                         doi = doi.replace('_', '/')
-                        print('--------------------For DOI: ', doi, ' and row: ', row + 1, '--------------------')
+                        print('--------------------DOI: ', doi, ' and row: ', row + 1, '--------------------')
                         for idx in range(len(vals) - 1):
                             self.df.loc[self.df['DOI'] == doi, 'new_feature_' + str(idx + 1)] = vals[idx + 1]
         self.df.to_excel('data/final_network_data.xlsx')
