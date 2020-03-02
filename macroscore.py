@@ -1,11 +1,18 @@
 import os
+from collections import defaultdict
+
 import pandas
-from sklearn.model_selection import StratifiedKFold, cross_val_score
+from sklearn.feature_selection import SelectKBest, chi2
+from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.svm import SVC
 import numpy as np
 from tensorflow import keras
+import sklearn.metrics as mx
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 
 class Macroscore:
@@ -105,11 +112,11 @@ class Macroscore:
         if self.label_type == 'pvalue.label':
             self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'Meta.analysis.significant'], axis=1)
         elif self.label_type == 'O.within.CI.R':
-            self.df = self.df.drop(['P.value.R', 'Direction.R', 'Meta.analysis.significant'], axis=1)
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'Meta.analysis.significant', 'pvalue.label'], axis=1)
         elif self.label_type == 'Meta.analysis.significant':
-            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R'], axis=1)
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'pvalue.label'], axis=1)
 
-        cols_drop = set(['DOI', '1st.author.O', 'Senior.author.O', 'Authors.O', 'Study.Title.O', 'Unnamed: 0', 'new_feature_301'])
+        cols_drop = set(['DOI', '1st.author.O', 'Senior.author.O', 'Authors.O', 'Study.Title.O', 'Unnamed: 0', 'new_feature_301', 'Unnamed: 0.1'])
         cols_total = set(self.df.columns)
         self.df = self.df.drop(cols_drop.intersection(cols_total), axis=1)
         # self.df = self.df.replace(to_replace=np.nan, value=0)
@@ -205,13 +212,15 @@ class Macroscore:
     def modelling(self):
         self.__remove_unusable_features__()
         self.__get_baseline__()
-        X = self.df.drop([self.label_type], axis=1)
+        # X = self.df.drop([self.label_type], axis=1)
+        X = self.df[['new_feature_176', 'new_feature_25', 'new_feature_89', 'new_feature_106',
+                     'new_feature_46', 'new_feature_275', 'new_feature_221', 'new_feature_93', 'new_feature_158']]
         y = self.df[self.label_type]
         skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
 
         gnb = GaussianNB()
-        Svc = SVC(kernel='rbf', gamma=1, C=0.1, random_state=0)
-        neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
+        Svc = SVC(kernel='rbf', gamma=0.9, C=1, random_state=0)
+        neigh = KNeighborsClassifier(n_neighbors=5, p=2, weights='uniform')
         print("Cross Validation Score of NB is: ", np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of SVC is: ", np.mean(cross_val_score(Svc, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of KNN is: ", np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
@@ -222,10 +231,10 @@ class Macroscore:
                 X_train, X_test = X.iloc[train_index], X.iloc[test_index]
                 y_train, y_test = y.iloc[train_index], y.iloc[test_index]
                 model = keras.Sequential([
-                    keras.layers.Dense(1024, input_dim=X.shape[1], activation='sigmoid'),
-                    keras.layers.Dense(512, activation='sigmoid'),
-                    keras.layers.Dense(256, activation='sigmoid'),
-                    keras.layers.Dense(128, activation='sigmoid'),
+                    keras.layers.Dense(16, input_dim=X.shape[1], activation='sigmoid'),
+                    keras.layers.Dense(8, activation='sigmoid'),
+                    keras.layers.Dense(16, activation='sigmoid'),
+                    keras.layers.Dense(8, activation='sigmoid'),
                     keras.layers.Dense(1, activation='sigmoid')
                 ])
                 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -234,6 +243,90 @@ class Macroscore:
                 acc_arr.append(accuracy)
             print('Accuracy of this neural network model is: %.2f' % (np.mean(acc_arr) * 100))
             print(acc_arr)
+
+    def select_best_features_chi2(self):
+        self.df = pandas.read_excel('data/final_network_data.xlsx', encoding='ansi')
+        self.__remove_unusable_features__()
+        X = self.df.drop([self.label_type], axis=1)
+        cols = X.columns
+        X = MinMaxScaler().fit_transform(X)
+        y = self.df[self.label_type]
+        # apply SelectKBest class to extract top 10 best features
+        bestfeatures = SelectKBest(score_func=chi2, k=10)
+        fit = bestfeatures.fit(X, y)
+        dfscores = pandas.DataFrame(fit.scores_)
+        dfcolumns = pandas.DataFrame(cols)
+        featureScores = pandas.concat([dfcolumns, dfscores], axis=1)
+        featureScores.columns = ['Specs', 'Score']
+        final_features = featureScores.nlargest(featureScores.shape[0] - 2, 'Score')
+        pandas.set_option('display.max_rows', final_features.shape[0] + 1)
+        return final_features
+
+    def __score_model__(self, X_train, X_test, y_train, y_test, clf):
+        clf.fit(X_train, y_train)
+        y_pred = clf.predict(X_test)
+        return mx.accuracy_score(y_test, y_pred)
+
+    def ablation_test(self):
+        self.__remove_unusable_features__()
+        X = self.df.drop([self.label_type], axis=1)
+        y = self.df[self.label_type]
+
+        gnb = GaussianNB()
+        svc = SVC(kernel='rbf', gamma=1, C=0.1, random_state=0)
+        neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
+
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
+
+        base_score = dict()
+        base_score['gnb'] = self.__score_model__(X_train, X_test, y_train, y_test, gnb)
+        base_score['svc'] = self.__score_model__(X_train, X_test, y_train, y_test, svc)
+        base_score['neigh'] = self.__score_model__(X_train, X_test, y_train, y_test, neigh)
+
+        scores = defaultdict(list)
+        for i in range(X_train.shape[1]):
+            cols = [ndx != i for ndx in range(X_train.shape[1])]
+            scores['gnb'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, gnb))
+            scores['svc'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, svc))
+            scores['neigh'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, neigh))
+
+        final_scores_gnb = dict()
+        final_scores_svc = dict()
+        final_scores_neigh = dict()
+        for k, v in scores.items():
+            if k == 'gnb':
+                for i in range(len(v)):
+                    final_scores_gnb[X.columns[i]] = (v[i] - base_score[k])
+                final_scores_gnb = sorted(final_scores_gnb.items(), key=lambda kv: kv[1], reverse=True)
+            elif k == 'svc':
+                for i in range(len(v)):
+                    final_scores_svc[X.columns[i]] = (v[i] - base_score[k])
+                final_scores_svc = sorted(final_scores_svc.items(), key=lambda kv: kv[1], reverse=True)
+            elif k == 'neigh':
+                for i in range(len(v)):
+                    final_scores_neigh[X.columns[i]] = (v[i] - base_score[k])
+                final_scores_neigh = sorted(final_scores_neigh.items(), key=lambda kv: kv[1], reverse=True)
+
+        print('Based on NB: ', final_scores_gnb)
+        print('Based on SVC : ', final_scores_svc)
+        print('Based on KNN: ', final_scores_neigh)
+
+    def plot_feature_graph(self, cols):
+        i = 10
+        sctr_plot = dict()
+        self.__get_baseline__()
+        y = self.df[self.label_type]
+        skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
+        while i < cols.shape[0]:
+            lst = cols['Specs'].head(i)
+            X = self.df[lst]
+            neigh = KNeighborsClassifier(n_neighbors=5, p=2, weights='uniform')
+            sctr_plot[i] = np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1))
+            i += 1
+        x = sctr_plot.keys()
+        y = sctr_plot.values()
+        plt.scatter(x, y)
+        plt.show()
 
 
 if __name__ == '__main__':
@@ -248,8 +341,12 @@ if __name__ == '__main__':
     #                     neural_model=True, fileName='data/RPPdata.xlsx')
     # mscore.get_data()
     # mscore.get_feature()
-    mscore = Macroscore('pvalue.label', feature_type='all', specify_features=False,
+    mscore = Macroscore('O.within.CI.R', feature_type='all', specify_features=False,
                         neural_model=True, fileName='data/final_network_data.xlsx')
     mscore.get_data()
+    features = mscore.select_best_features_chi2()
+    print(features)
+    # mscore.plot_feature_graph(features)
+    # mscore.modelling()
+    # mscore.ablation_test()
 
-    mscore.modelling()
