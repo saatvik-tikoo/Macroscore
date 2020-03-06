@@ -3,19 +3,19 @@ import seaborn as sns
 from matplotlib import pyplot as plt, rcParams
 import pandas as pd
 from sklearn.metrics import auc, roc_curve, accuracy_score
-from sklearn import decomposition
+from sklearn import manifold
 
 def plot_charts(data):
     cols_drop = set(['P.value.R', 'Direction.R', 'O.within.CI.R', 'Meta.analysis.significant', 'pvalue.label', 'DOI', '1st.author.O', 'Senior.author.O', 'Authors.O', 'Study.Title.O', 'Unnamed: 0', 'new_feature_301', 'Unnamed: 0.1'])
     cols_total = set(data.columns)
     X = data.drop(cols_drop.intersection(cols_total), axis=1)
     X = X.dropna()
-    y = data['Meta.analysis.significant']
+    y = data['O.within.CI.R']
     X_norm = (X - X.min()) / (X.max() - X.min())
-    pca = decomposition.PCA(n_components=2)  # 2-dimensional PCA
+    pca = manifold.TSNE(n_components=2)  # 2-dimensional PCA
     transformed = pd.DataFrame(pca.fit_transform(X_norm))
-    plt.scatter(transformed[y == 0][0], transformed[y == 0][1], label='Class 1', c='red')
-    plt.scatter(transformed[y == 1][0], transformed[y == 1][1], label='Class 2', c='blue')
+    plt.scatter(transformed[y == 0][0], transformed[y == 0][1], label='Non-Replicable', c='red')
+    plt.scatter(transformed[y == 1][0], transformed[y == 1][1], label='Replicable', c='blue')
 
     plt.legend()
 

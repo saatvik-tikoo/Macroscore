@@ -133,8 +133,14 @@ class NetworkGraph:
 
 if __name__ == '__main__':
     cnn = NetworkGraph()
-    cnn.get_data('all')
+    # Uncomment below to generate the graph: Step-2
+    # cnn.get_data()
     # cnn.citation_graph()
     # cnn.coauthorship_graph()
-    # cnn.display_graph('data/citations_network.gpickle')
+
+    # Uncomment below to add the generated node2vec features to our data: Step-4
+    cnn.get_data('all')
     cnn.addNetworkFeatures()
+
+    # Uncomment below to display the generated graph
+    # cnn.display_graph('data/citations_network.gpickle')

@@ -1,7 +1,7 @@
 import os
 from collections import defaultdict
-
 import pandas
+from sklearn import ensemble
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
 from sklearn.naive_bayes import GaussianNB
@@ -12,7 +12,7 @@ import numpy as np
 from tensorflow import keras
 import sklearn.metrics as mx
 from matplotlib import pyplot as plt
-import seaborn as sns
+import xgboost as xgb
 
 
 class Macroscore:
@@ -93,6 +93,7 @@ class Macroscore:
             else:
                 total_false += 1
         print("Total rows is= ", total_val)
+        print("Total papers reproducible", total_true)
         print("total_true % is= ", (total_true / total_val) * 100)
         print("total_false % is=", (total_false / total_val) * 100)
 
@@ -208,22 +209,29 @@ class Macroscore:
             return
         print('Final Shape is: ', self.df.shape)
         self.df.to_excel('data/new_data.xlsx')
+        self.__get_baseline__()
 
     def modelling(self):
         self.__remove_unusable_features__()
         self.__get_baseline__()
         # X = self.df.drop([self.label_type], axis=1)
-        X = self.df[['new_feature_176', 'new_feature_25', 'new_feature_89', 'new_feature_106',
-                     'new_feature_46', 'new_feature_275', 'new_feature_221', 'new_feature_93', 'new_feature_158']]
+        X = self.df[['new_feature_63', 'new_feature_93', 'new_feature_78', 'new_feature_139', 'new_feature_1',
+                     'new_feature_75', 'new_feature_292', 'new_feature_42', 'new_feature_111', 'new_feature_183']]
         y = self.df[self.label_type]
         skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
 
         gnb = GaussianNB()
         Svc = SVC(kernel='rbf', gamma=0.9, C=1, random_state=0)
         neigh = KNeighborsClassifier(n_neighbors=5, p=2, weights='uniform')
+        forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=10, max_features='auto', max_depth=10,
+                                                 min_samples_split=2, min_samples_leaf=1, bootstrap=True)
         print("Cross Validation Score of NB is: ", np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of SVC is: ", np.mean(cross_val_score(Svc, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of KNN is: ", np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
+        print("Cross Validation Score of Random Forest is: ", np.mean(cross_val_score(forest, X, y, cv=skf, n_jobs=1)))
+
+        xgboost = xgb.XGBClassifier(max_depth=6, objective='binary:logistic', learning_rate=1, colsample_bytree=1, reg_alpha=5, booster='gbtree')
+        print("Cross Validation Score of XGB is: ", np.mean(cross_val_score(xgboost, X, y, cv=skf, n_jobs=1)))
 
         if self.neural_model:
             acc_arr = []
@@ -336,17 +344,21 @@ if __name__ == '__main__':
                    'Direction.R', 'Meta.analysis.significant', 'Citation.count.senior.author.O', '1st.author.O',
                    'Senior.author.O', 'Authors.O']
 
-    # Given an extra function that can abstract the encoding type to Dict-Vectorize and One Hot and Label
+    # Uncomment below to clean data and add network features: Step-1
     # mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
     #                     neural_model=True, fileName='data/RPPdata.xlsx')
     # mscore.get_data()
     # mscore.get_feature()
-    mscore = Macroscore('O.within.CI.R', feature_type='all', specify_features=False,
+
+    # Uncomment below to train and test our models: Step-5
+    mscore = Macroscore('pvalue.label', feature_type='all', specify_features=False,
                         neural_model=True, fileName='data/final_network_data.xlsx')
     mscore.get_data()
-    features = mscore.select_best_features_chi2()
-    print(features)
+    mscore.modelling()
+
+    # Various Tests
+    # features = mscore.select_best_features_chi2()
+    # print(features)
     # mscore.plot_feature_graph(features)
-    # mscore.modelling()
     # mscore.ablation_test()
 

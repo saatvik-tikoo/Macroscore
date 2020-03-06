@@ -119,6 +119,7 @@ def read_graph(file_name):
 
 
 if __name__ == "__main__":
+    # Step-3
     input_file = ['data/citations_network.gpickle', 'data/coauthorship_network.gpickle']
     output_file = ['data/node2vec_citations.emb', 'data/node2vec_coauthorship.emb']
     for i in range(len(input_file)):
