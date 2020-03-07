@@ -1,7 +1,7 @@
 venv
 extras
-data
-!data/final_network_data.xlsx
 .idea
 __pycache__
 .ipynb_checkpoints
+data
+!data/final_network_data.xlsx
