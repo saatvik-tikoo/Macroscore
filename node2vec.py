@@ -91,7 +91,7 @@ class Node2Vec:
 
         for edge in self.G.edges():
             self.alias_edges[edge] = self.__get_alias_edge__(edge[0], edge[1])
-            self.alias_edges[(edge[1], edge[0])] = self.__get_alias_edge__(edge[1], edge[0])
+            # self.alias_edges[(edge[1], edge[0])] = self.__get_alias_edge__(edge[1], edge[0])
         return
 
     def simulate_walks(self):
@@ -120,8 +120,8 @@ def read_graph(file_name):
 
 if __name__ == "__main__":
     # Step-3
-    input_file = ['data/citations_network.gpickle', 'data/coauthorship_network.gpickle']
-    output_file = ['data/node2vec_citations.emb', 'data/node2vec_coauthorship.emb']
+    input_file = ['data/references_network_2hops_mag.gpickle']
+    output_file = ['data/node2vec_references_network_2hops_mag.emb']
     for i in range(len(input_file)):
         print('----------Getting Features for file ', i + 1, '----------')
         nx_G = read_graph(input_file[i])

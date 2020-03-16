@@ -117,7 +117,7 @@ class Macroscore:
         elif self.label_type == 'Meta.analysis.significant':
             self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'pvalue.label'], axis=1)
 
-        cols_drop = set(['DOI', '1st.author.O', 'Senior.author.O', 'Authors.O', 'Study.Title.O', 'Unnamed: 0', 'new_feature_301', 'Unnamed: 0.1'])
+        cols_drop = set(['DOI', '1st.author.O', 'Senior.author.O', 'Study.Title.O', 'Unnamed: 0', 'new_feature_301', 'Unnamed: 0.1'])
         cols_total = set(self.df.columns)
         self.df = self.df.drop(cols_drop.intersection(cols_total), axis=1)
         # self.df = self.df.replace(to_replace=np.nan, value=0)
@@ -210,6 +210,27 @@ class Macroscore:
         print('Final Shape is: ', self.df.shape)
         self.df.to_excel('data/new_data.xlsx')
         self.__get_baseline__()
+
+    # Just call this function 10 times
+    def get_random_kfolds(self, k):
+        authors = set([j.strip() for i in list(self.df['Authors.O']) for j in i.split(',')])
+        test_set, train_set = pandas.DataFrame(columns=list(self.df.columns)), pandas.DataFrame(columns=list(self.df.columns))
+        while len(test_set) <= self.df.shape[0] * (k / 100):
+            author = authors[np.random.randint(0, len(author))]
+            pandas.concat([test_set, self.df.where(author in self.df['Authors.O'])])
+
+            # remove all the authors from the list that have been added here
+            test_set_authors = set([j.strip() for i in list(test_set['Authors.O']) for j in i.split(',')])
+            authors = authors - test_set_authors
+
+            if train_set.shape[0] <= self.df.shape[0] * ((k - 1) / 100):
+                author = authors[np.random.randint(0, len(author))]
+                pandas.concat([train_set, self.df.where(author in self.df['Authors.O'])])
+
+                # remove all the authors from the list that have been added here
+                train_set_authors = set([j.strip() for i in list(test_set['Authors.O']) for j in i.split(',')])
+                authors = authors - train_set_authors
+        return test_set, train_set
 
     def modelling(self):
         self.__remove_unusable_features__()
@@ -338,23 +359,23 @@ class Macroscore:
 
 
 if __name__ == '__main__':
-    req_columns = ['Study.Title.O', 'Volume.O', 'Citation.count.paper.O', 'Number.of.Authors.O', 'DOI', 'Citation.Count.1st.author.O',
+    req_columns = ['Study.Title.O', 'Authors.O', 'Volume.O', 'Citation.count.paper.O', 'Number.of.Authors.O', 'DOI', 'Citation.Count.1st.author.O',
                    'Reported.P.value.O', 'Exciting.result.O', 'Surprising.result.O', 'N.O', 'Effect.size.O',
                    'Institution.prestige.1st.author.O', 'Institution.prestige.senior.author.O', 'O.within.CI.R', 'P.value.R',
                    'Direction.R', 'Meta.analysis.significant', 'Citation.count.senior.author.O', '1st.author.O',
-                   'Senior.author.O', 'Authors.O']
+                   'Senior.author.O']
 
     # Uncomment below to clean data and add network features: Step-1
-    # mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
-    #                     neural_model=True, fileName='data/RPPdata.xlsx')
-    # mscore.get_data()
-    # mscore.get_feature()
+    mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
+                        neural_model=True, fileName='data/RPPdata.xlsx')
+    mscore.get_data()
+    mscore.get_feature()
 
     # Uncomment below to train and test our models: Step-5
-    mscore = Macroscore('pvalue.label', feature_type='all', specify_features=False,
-                        neural_model=True, fileName='data/final_network_data.xlsx')
-    mscore.get_data()
-    mscore.modelling()
+    # mscore = Macroscore('pvalue.label', feature_type='all', specify_features=False,
+    #                     neural_model=True, fileName='data/final_network_data.xlsx')
+    # mscore.get_data()
+    # mscore.modelling()
 
     # Various Tests
     # features = mscore.select_best_features_chi2()
