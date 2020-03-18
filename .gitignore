@@ -3,6 +3,10 @@ extras
 .idea
 __pycache__
 .ipynb_checkpoints
-data
-!data/RPPdata.xlsx
-!data/final_network_data.xlsx
+data/MAG_data
+data/RPPdataConverted_2hop
+data/*.gexf
+data/*.gpickle
+data/*.pkl
+data/*.emb
+data/*.csv
