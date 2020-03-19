@@ -119,9 +119,9 @@ def read_graph(file_name):
 
 
 if __name__ == "__main__":
-    # Step-3
-    input_file = ['data/references_network_2hops_mag.gpickle']
-    output_file = ['data/node2vec_references_network_2hops_mag.emb']
+    # Add the input and output files here in the same sequence.
+    input_file = ['data/references_network_2hops_wos.gpickle']
+    output_file = ['data/node2vec_references_network_2hops_wos.emb']
     for i in range(len(input_file)):
         print('----------Getting Features for file ', i + 1, '----------')
         nx_G = read_graph(input_file[i])
@@ -132,3 +132,4 @@ if __name__ == "__main__":
         rand_walk = n2v.simulate_walks()
         print('----Word2Vec----')
         n2v.learn_embeddings(rand_walk)
+        print('--Completed--')
