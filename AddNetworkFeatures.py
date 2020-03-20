@@ -7,39 +7,45 @@ import pandas as pd
 
 
 class NetworkFetaures:
-    def __init__(self, file, graph_type):
+    def __init__(self, file, output, graph_type):
         self.df = None
         self.file = file
+        self.output = output
         self.graph_type = graph_type
 
-    def get_data(self, features=['DOI']):
+    def get_data(self):
         self.df = pd.read_excel('data/new_data.xlsx', encoding='ansi', )
 
-    def addNetworkFeatures(self, graph_type='wos'):
-        g = nx.read_gpickle('data/citations_network_2hops_wos.gpickle')
+    def addNetworkFeatures(self):
         with open(self.file, 'r') as f_read:
             lines = f_read.readlines()
-            if graph_type == 'mag':
-                mappings = json.loads(json.dumps(pickle.load(open("data/IDS_doi_mapping", "rb"))))
+            mappings = None
+            if self.graph_type == 'mag_c':
+                mappings = json.loads(json.dumps(pickle.load(open("data/IDS_doi_mapping_citations.pkl", "rb"))))
+            elif self.graph_type == 'mag_r':
+                mappings = json.loads(json.dumps(pickle.load(open("data/IDS_doi_mapping_references.pkl", "rb"))))
             lines_dict = dict()
             for idx_l, line in enumerate(lines):
                 if idx_l > 0:
                     vals = line.split(' ')
-                    if graph_type == 'wos':
+                    if 'wos' in self.graph_type:
                         lines_dict[vals[0]] = vals[1:]
-                    elif graph_type == 'mag':
+                    elif 'mag' in self.graph_type and vals[0] in mappings:
                         lines_dict[mappings[vals[0]]] = vals[1:]
 
             for _, row in self.df.iterrows():
-                doi = row['DOI'].replace('/', '_')
+                if 'wos' in self.graph_type:
+                    doi = row['DOI'].replace('/', '_')
+                else:
+                    doi = row['DOI']
                 idx = 0
                 if doi in lines_dict:
                     fields = lines_dict[doi]
                     for idx, col in enumerate(fields):
-                        self.df.at[_, 'new_feature_' + str(idx + 1)] = col
+                        self.df.at[_, 'new_feature_' + str(idx + 1) + self.graph_type] = col
                 print('--------------------DOI: {} and row: {} and total-cols are: {}--------------------'.format(doi, _ + 1, idx + 1))
         print(self.df.shape)
-        self.df.to_excel('data/final_network_data.xlsx')
+        self.df.to_excel(self.output)
         print('Done')
 
     def display_graph(self):
@@ -53,10 +59,16 @@ class NetworkFetaures:
 
 
 if __name__ == '__main__':
-    # Set a proper file name and graph_type = 'wos' or 'mag'
-    cnn = NetworkFetaures(file='data/node2vec_citations_network_2hops_wos.emb', graph_type='wos')
-    cnn.get_data()
-    cnn.addNetworkFeatures()
+    # Set a proper file name and graph_type = 'wos' or 'mag_c' or 'mag_r'
+    input_file = ['data/node2vec_references_network_2hops_wos.emb', 'data/node2vec_references_network_2hops_mag.emb',
+                  'data/node2vec_citations_network_2hops_mag.emb']
+    output_file = ['data/final_references_wos_data.xlsx', 'data/final_references_mag_data.xlsx',
+                   'data/final_citations_mag_data.xlsx']
+    graph = ['wos', 'mag_r', 'mag_c']
+    for i in range(3):
+        cnn = NetworkFetaures(file=input_file[i], output=output_file[i], graph_type=graph[i])
+        cnn.get_data()
+        cnn.addNetworkFeatures()
 
     # Uncomment below to display the generated graph
     # cnn.display_graph('data/citations_network_2hops_wos.gpickle')

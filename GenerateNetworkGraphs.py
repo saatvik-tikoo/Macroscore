@@ -39,9 +39,9 @@ class NetworkGraph:
         g = nx.DiGraph()
         self.df.dropna(subset=['DOI'])
         self.__graph_wos__(g, set(self.df['DOI']), hops)
-        print('---------Getting betweenness---------')
-        betweenness_dict = nx.betweenness_centrality(g)
-        nx.set_node_attributes(g, betweenness_dict, 'betweenness')
+        # print('---------Getting betweenness---------')
+        # betweenness_dict = nx.betweenness_centrality(g)
+        # nx.set_node_attributes(g, betweenness_dict, 'betweenness')
         print('---------Getting Degree---------')
         degree_dict = dict(g.degree(g.nodes()))
         nx.set_node_attributes(g, degree_dict, 'degree')
@@ -85,9 +85,9 @@ class NetworkGraph:
             if doi in mappings:
                 IDS[mappings[doi][0]] = doi
         self.__graph_mag__(g, IDS.keys(), df_citations, graph_type, 2)
-        print('---------Getting betweenness---------')
-        betweenness_dict = nx.betweenness_centrality(g)
-        nx.set_node_attributes(g, betweenness_dict, 'betweenness')
+        # print('---------Getting betweenness---------')
+        # betweenness_dict = nx.betweenness_centrality(g)
+        # nx.set_node_attributes(g, betweenness_dict, 'betweenness')
         print('---------Getting Degree---------')
         degree_dict = dict(g.degree(g.nodes()))
         nx.set_node_attributes(g, degree_dict, 'degree')
@@ -97,7 +97,7 @@ class NetworkGraph:
         print('Number of edges in the graph: ', len(g.edges()))
         nx.write_gpickle(g, 'data/{}_network_{}hops_mag.gpickle'.format(graph_type, hops))
         nx.write_gexf(g, "data/{}_network_{}hops_mag.gexf".format(graph_type, hops))
-        pickle.dump(IDS, open('data/IDS_doi_mapping.pkl', 'wb'))
+        pickle.dump(IDS, open('data/IDS_doi_mapping_{}.pkl'.format(graph_type), 'wb'))
         print('-------------Graph Saved--------------')
 
     def display_graph(self, file):
@@ -115,7 +115,7 @@ if __name__ == '__main__':
 
     cnn.get_data()
     # WOS data has only option of getting references. So only option we can change is number of hops
-    cnn.graph_wos(hops=2)
+    # cnn.graph_wos(hops=2)
 
     # Mag data has two options for generating the graph_type='references' and 'citations', Also we can set the number of hops
-    # cnn.graph_mag(graph_type='references', hops=2)
+    cnn.graph_mag(graph_type='references', hops=2)

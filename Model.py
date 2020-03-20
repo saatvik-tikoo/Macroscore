@@ -13,6 +13,7 @@ import sklearn.metrics as mx
 from matplotlib import pyplot as plt
 import xgboost as xgb
 
+
 class Model:
     def __init__(self, label_type, neural_model, fileName):
         self.label_type = label_type
@@ -65,7 +66,7 @@ class Model:
                     final_scores_neigh[X.columns[i]] = (v[i] - base_score[k])
                 final_scores_neigh = sorted(final_scores_neigh.items(), key=lambda kv: kv[1], reverse=True)
 
-        print('Based on NB: ', final_scores_gnb)
+        print('Based on Naive Bayes: ', final_scores_gnb)
         print('Based on SVC : ', final_scores_svc)
         print('Based on KNN: ', final_scores_neigh)
 
@@ -151,7 +152,7 @@ class Model:
         neigh = KNeighborsClassifier(n_neighbors=6, p=3, weights='uniform')
         forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=5, max_features='auto', max_depth=10,
                                                  min_samples_split=2, min_samples_leaf=1, bootstrap=True)
-        print("Cross Validation Score of NB is: %.2f" % np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
+        print("Cross Validation Score of Naive Bayes is: %.2f" % np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of SVC is: %.2f" % np.mean(cross_val_score(svc, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of KNN is: %.2f" % np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of Random Forest is: %.2f" % np.mean(cross_val_score(forest, X, y, cv=skf, n_jobs=1)))
@@ -231,7 +232,7 @@ class Model:
                 _, accuracy = model.evaluate(X_test, y_test)
                 result['neuralNetwork'].append(accuracy)
 
-        print("Accuracy of NB is: %0.2f" % np.mean(result['gnb']))
+        print("Accuracy of Naive Bayes is: %0.2f" % np.mean(result['gnb']))
         print("Accuracy of SVC is: %0.2f" % np.mean(result['svc']))
         print("Accuracy of KNN is: %0.2f" % np.mean(result['neigh']))
         print("Accuracy of Random Forest is: %0.2f" % np.mean(result['forest']))
@@ -324,10 +325,27 @@ class Model:
 
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    mscore = Model(all_labels[0], neural_model=True, fileName='data/final_network_data.xlsx')
-    mscore.get_data()
-    features = mscore.select_best_features_chi2()
-    features = list(features['Specs'])[:10]
-#     mscore.modelling(features)
-    mscore.modelling_custom_kfolds(features)
-#     mscore.tuning_hyperparameters(features)
+    files = ['data/final_references_wos_data.xlsx', 'data/final_references_mag_data.xlsx',
+             'data/final_citations_mag_data.xlsx', 'data/final_bestfeatures_data.xlsx']
+    # full_df = pandas.DataFrame()
+    for i in range(len(files)):
+        print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
+        mscore = Model(all_labels[0], neural_model=True, fileName=files[i])
+        mscore.get_data()
+        features = mscore.select_best_features_chi2()
+        b_features = list(features['Specs'])[:10]
+        if i < len(files) - 1:
+            mscore.modelling(b_features)
+            # mscore.modelling_custom_kfolds(b_features)
+        else:
+            mscore.modelling(list(features['Specs']))
+            # mscore.modelling_custom_kfolds(list(features['Specs']))
+
+        # mscore.tuning_hyperparameters(b_features)
+
+        # if i == 0:
+        #     df_temp = pandas.read_excel(files[i], encoding='ansi')
+        #     full_df = pandas.concat([full_df, df_temp[['P.value.R', 'Direction.R', 'O.within.CI.R',
+        #                                                'Meta.analysis.significant', 'pvalue.label',
+        #                                                'Authors.O']]], axis=1)
+    # full_df = pandas.concat([full_df, mscore.df[features]], axis=1)

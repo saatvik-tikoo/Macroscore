@@ -120,8 +120,10 @@ def read_graph(file_name):
 
 if __name__ == "__main__":
     # Add the input and output files here in the same sequence.
-    input_file = ['data/references_network_2hops_wos.gpickle']
-    output_file = ['data/node2vec_references_network_2hops_wos.emb']
+    input_file = ['data/references_network_2hops_wos.gpickle', 'data/citations_network_2hops_mag.gpickle',
+                  'data/references_network_2hops_mag.gpickle']
+    output_file = ['data/node2vec_references_network_2hops_wos.emb', 'data/node2vec_citations_network_2hops_mag.emb',
+                   'data/node2vec_references_network_2hops_mag.emb']
     for i in range(len(input_file)):
         print('----------Getting Features for file ', i + 1, '----------')
         nx_G = read_graph(input_file[i])

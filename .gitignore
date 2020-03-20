@@ -9,4 +9,3 @@ data/*.gexf
 data/*.gpickle
 data/*.pkl
 data/*.emb
-data/*.csv

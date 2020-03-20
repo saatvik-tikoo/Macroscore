@@ -5,7 +5,7 @@ import numpy as np
 
 class Macroscore:
     def __init__(self, label_type, feature_type='all', encoding='oneHot', specify_features=False,
-                 features=None, neural_model=False, fileName=''):
+                 features=None, fileName=''):
         # label_type: {'pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant'}
         self.label_type = label_type
         # features: {'all', 'common', 'network'}
@@ -16,8 +16,6 @@ class Macroscore:
         self.specify_features = specify_features
         # list of features if specify_features is true
         self.features = features
-        # true if neural network model is required
-        self.neural_model = neural_model
         self.fileName = fileName
         self.df = None
         self.path_head = '../DataExtraction/WOS/RPPdataConverted'
@@ -193,6 +191,6 @@ if __name__ == '__main__':
                    'Senior.author.O']
 
     mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
-                        neural_model=True, fileName='data/RPPdata.xlsx')
+                        fileName='data/RPPdata.xlsx')
     mscore.get_data()
     mscore.get_feature()
