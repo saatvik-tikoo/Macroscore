@@ -12,7 +12,7 @@ from tensorflow import keras
 import sklearn.metrics as mx
 from matplotlib import pyplot as plt
 import xgboost as xgb
-
+import copy
 
 class Model:
     def __init__(self, label_type, neural_model, fileName):
@@ -43,8 +43,8 @@ class Model:
         base_score['neigh'] = self.__score_model__(X_train, X_test, y_train, y_test, neigh)
 
         scores = defaultdict(list)
-        for i in range(X_train.shape[1]):
-            cols = [ndx != i for ndx in range(X_train.shape[1])]
+        for idx in range(X_train.shape[1]):
+            cols = [ndx != idx for ndx in range(X_train.shape[1])]
             scores['gnb'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, gnb))
             scores['svc'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, svc))
             scores['neigh'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, neigh))
@@ -54,16 +54,16 @@ class Model:
         final_scores_neigh = dict()
         for k, v in scores.items():
             if k == 'gnb':
-                for i in range(len(v)):
-                    final_scores_gnb[X.columns[i]] = (v[i] - base_score[k])
+                for idx in range(len(v)):
+                    final_scores_gnb[X.columns[idx]] = (v[idx] - base_score[k])
                 final_scores_gnb = sorted(final_scores_gnb.items(), key=lambda kv: kv[1], reverse=True)
             elif k == 'svc':
-                for i in range(len(v)):
-                    final_scores_svc[X.columns[i]] = (v[i] - base_score[k])
+                for idx in range(len(v)):
+                    final_scores_svc[X.columns[idx]] = (v[idx] - base_score[k])
                 final_scores_svc = sorted(final_scores_svc.items(), key=lambda kv: kv[1], reverse=True)
             elif k == 'neigh':
-                for i in range(len(v)):
-                    final_scores_neigh[X.columns[i]] = (v[i] - base_score[k])
+                for idx in range(len(v)):
+                    final_scores_neigh[X.columns[idx]] = (v[idx] - base_score[k])
                 final_scores_neigh = sorted(final_scores_neigh.items(), key=lambda kv: kv[1], reverse=True)
 
         print('Based on Naive Bayes: ', final_scores_gnb)
@@ -79,7 +79,7 @@ class Model:
         elif self.label_type == 'Meta.analysis.significant':
             self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'pvalue.label'], axis=1)
 
-        cols_drop = set(['DOI', '1st.author.O', 'Senior.author.O', 'Study.Title.O', 'Unnamed: 0', 'Unnamed: 0.1', 'Volume.O'])
+        cols_drop = {'DOI', '1st.author.O', 'Senior.author.O', 'Study.Title.O', 'Unnamed: 0', 'Unnamed: 0.1', 'Volume.O'}
         cols_total = set(self.df.columns)
         self.df = self.df.drop(cols_drop.intersection(cols_total), axis=1)
         self.df = self.df.dropna()
@@ -87,7 +87,7 @@ class Model:
 
     def __get_baseline__(self):
         total_true = total_false = total_val = 0
-        for i, row in self.df.iterrows():
+        for idx, row in self.df.iterrows():
             total_val += 1
             if row[self.label_type] == 1:
                 total_true += 1
@@ -113,29 +113,30 @@ class Model:
         pandas.set_option('display.max_rows', final_features.shape[0] + 1)
         return final_features
 
-    def get_random_kfolds(self, train_set_size=0.9, seed=0):
+    def get_random_kfolds(self, train_set_size=0.9, seed=0, authors=None):
+        if authors is None:
+            return
         df = self.df.copy()
-        authors = list(set([j.strip() for i in list(df['Authors.O']) for j in i.split(',')]))
         train_set, test_set = pandas.DataFrame(columns=list(df.columns)), pandas.DataFrame(columns=list(df.columns))
         while len(train_set) <= self.df.shape[0] * train_set_size and len(authors) > 0 and df.shape[0] > 0:
             np.random.seed(seed)
             author = authors[np.random.randint(0, len(authors))]
-            temp_df = df.loc[df['Authors.O'].str.contains(author)]
+            temp_df = df.loc[df['Authors.O'].str.contains(author, case=False)]
             train_set = pandas.concat([train_set, temp_df], ignore_index=True)
             authors.remove(author)
 
             # remove all the rows from df that have been added to the new set
-            df.drop(df[df['Authors.O'].str.contains(author)].index, inplace=True)
+            df.drop(df[df['Authors.O'].str.contains(author, case=False)].index, inplace=True)
 
             if test_set.shape[0] <= self.df.shape[0] * (1 - train_set_size) and len(authors) > 0 and df.shape[0] > 0:
                 np.random.seed(seed)
                 author = authors[np.random.randint(0, len(authors))]
-                temp_df = df.loc[df['Authors.O'].str.contains(author)]
+                temp_df = df.loc[df['Authors.O'].str.contains(author, case=False)]
                 test_set = pandas.concat([test_set, temp_df], ignore_index=True)
                 authors.remove(author)
 
                 # remove all the rows from df that have been added to the new set
-                df.drop(df[df['Authors.O'].str.contains(author)].index, inplace=True)
+                df.drop(df[df['Authors.O'].str.contains(author, case=False)].index, inplace=True)
 
         train_set = train_set.drop(['Authors.O'], axis=1)
         test_set = test_set.drop(['Authors.O'], axis=1)
@@ -185,7 +186,7 @@ class Model:
         neigh = KNeighborsClassifier(n_neighbors=6, p=3, weights='uniform')
         forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=5, max_depth=10, bootstrap=True)
         xgboost = xgb.XGBClassifier(max_depth=6, objective='binary:logistic', learning_rate=1, colsample_bytree=1, reg_alpha=5, booster='gbtree')
-
+        model = None
         if self.neural_model:
             model = keras.Sequential([
                 keras.layers.Dense(32, input_dim=len(best_features), activation='sigmoid'),
@@ -195,9 +196,15 @@ class Model:
                 keras.layers.Dense(1, activation='sigmoid')
             ])
         result = defaultdict(list)
-        for i in range(10):
-            print('Getting {} set '.format(i + 1))
-            train_set, test_set = self.get_random_kfolds(train_set_size=0.8, seed=i)
+        authors = []
+        for au in list(self.df['Authors.O']):
+            for j in au.split(','):
+                author = j.strip().lower()
+                if author not in authors:
+                    authors.append(author)
+        for idx in range(10):
+            print('Getting {} set '.format(idx + 1))
+            train_set, test_set = self.get_random_kfolds(train_set_size=0.8, seed=idx, authors=copy.deepcopy(authors))
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
             y_train = y_train.astype('int')
@@ -335,17 +342,20 @@ if __name__ == '__main__':
         features = mscore.select_best_features_chi2()
         b_features = list(features['Specs'])[:10]
         if i < len(files) - 1:
-            mscore.modelling(b_features)
-            # mscore.modelling_custom_kfolds(b_features)
+            # mscore.modelling(b_features)
+            mscore.modelling_custom_kfolds(b_features)
         else:
-            mscore.modelling(list(features['Specs']))
-            # mscore.modelling_custom_kfolds(list(features['Specs']))
+            # mscore.modelling(list(features['Specs']))
+            mscore.modelling_custom_kfolds(list(features['Specs']))
 
         # mscore.tuning_hyperparameters(b_features)
 
+        # df_temp = pandas.read_excel(files[i], encoding='ansi')
         # if i == 0:
-        #     df_temp = pandas.read_excel(files[i], encoding='ansi')
         #     full_df = pandas.concat([full_df, df_temp[['P.value.R', 'Direction.R', 'O.within.CI.R',
         #                                                'Meta.analysis.significant', 'pvalue.label',
         #                                                'Authors.O']]], axis=1)
-    # full_df = pandas.concat([full_df, mscore.df[features]], axis=1)
+        #
+        # full_df = pandas.concat([full_df, df_temp[b_features]], axis=1)
+    # full_df.to_excel('data/final_bestfeatures_data.xlsx')
+

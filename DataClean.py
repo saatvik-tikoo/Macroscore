@@ -190,7 +190,7 @@ if __name__ == '__main__':
                    'Direction.R', 'Meta.analysis.significant', 'Citation.count.senior.author.O', '1st.author.O',
                    'Senior.author.O']
 
-    mscore = Macroscore('pvalue.label', feature_type='all', specify_features=True, features=req_columns,
+    mscore = Macroscore('pvalue.label', feature_type='common', specify_features=True, features=req_columns,
                         fileName='data/RPPdata.xlsx')
     mscore.get_data()
     mscore.get_feature()
