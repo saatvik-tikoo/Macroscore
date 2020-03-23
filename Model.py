@@ -11,7 +11,6 @@ import numpy as np
 from tensorflow import keras
 import sklearn.metrics as mx
 from matplotlib import pyplot as plt
-import xgboost as xgb
 import copy
 
 class Model:
@@ -93,17 +92,17 @@ class Model:
                 total_true += 1
             else:
                 total_false += 1
-        print("Total rows is= ", total_val)
-        print("Total papers reproducible", total_true)
-        print("total_true % is= ", (total_true / total_val) * 100)
-        print("total_false % is=", (total_false / total_val) * 100)
+        print("Total rows is: ", total_val)
+        print("Total papers reproducible: ", total_true)
+        print("total_true % is: ", (total_true / total_val) * 100)
+        print("total_false % is:", (total_false / total_val) * 100)
 
     def select_best_features_chi2(self):
         X = self.df.drop([self.label_type, 'Authors.O'], axis=1)
         cols = X.columns
         X = MinMaxScaler().fit_transform(X)
         y = self.df[self.label_type]
-        bestfeatures = SelectKBest(score_func=chi2, k=10)
+        bestfeatures = SelectKBest(score_func=chi2, k='all')
         fit = bestfeatures.fit(X, y)
         dfscores = pandas.DataFrame(fit.scores_)
         dfcolumns = pandas.DataFrame(cols)
@@ -158,9 +157,6 @@ class Model:
         print("Cross Validation Score of KNN is: %.2f" % np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of Random Forest is: %.2f" % np.mean(cross_val_score(forest, X, y, cv=skf, n_jobs=1)))
 
-        xgboost = xgb.XGBClassifier(max_depth=6, objective='binary:logistic', learning_rate=1, colsample_bytree=1, reg_alpha=5, booster='gbtree')
-        print("Cross Validation Score of XGB is: %.2f" % np.mean(cross_val_score(xgboost, X, y, cv=skf, n_jobs=1)))
-
         if self.neural_model:
             acc_arr = []
             model = keras.Sequential([
@@ -183,9 +179,8 @@ class Model:
     def modelling_custom_kfolds(self, best_features):
         gnb = GaussianNB()
         svc = SVC(kernel='rbf', gamma=0.1, C=0.1, random_state=0)
-        neigh = KNeighborsClassifier(n_neighbors=6, p=3, weights='uniform')
-        forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=5, max_depth=10, bootstrap=True)
-        xgboost = xgb.XGBClassifier(max_depth=6, objective='binary:logistic', learning_rate=1, colsample_bytree=1, reg_alpha=5, booster='gbtree')
+        neigh = KNeighborsClassifier(n_neighbors=12, p=3, weights='uniform')
+        forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=7, max_depth=4, bootstrap=True)
         model = None
         if self.neural_model:
             model = keras.Sequential([
@@ -229,10 +224,6 @@ class Model:
             forest_pred = forest.predict(X_test)
             result['forest'].append(mx.accuracy_score(y_test, forest_pred))
 
-            xgboost.fit(X_train, y_train)
-            xgboost_pred = xgboost.predict(X_test)
-            result['xgboost'].append(mx.accuracy_score(y_test, xgboost_pred))
-
             if self.neural_model:
                 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
                 model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
@@ -243,15 +234,20 @@ class Model:
         print("Accuracy of SVC is: %0.2f" % np.mean(result['svc']))
         print("Accuracy of KNN is: %0.2f" % np.mean(result['neigh']))
         print("Accuracy of Random Forest is: %0.2f" % np.mean(result['forest']))
-        print("Accuracy of Xgboost is: %0.2f" % np.mean(result['xgboost']))
         if self.neural_model:
             print("Accuracy of Neural Network is: %0.2f" % np.mean(result['neuralNetwork']))
 
     def tuning_hyperparameters(self, best_features):
         res_best = defaultdict(list)
-        for i in range(10):
-            print('\n----------Round {}----------'.format(i + 1))
-            train_set, test_set = self.get_random_kfolds(train_set_size=0.8)
+        authors = []
+        for au in list(self.df['Authors.O']):
+            for j in au.split(','):
+                author = j.strip().lower()
+                if author not in authors:
+                    authors.append(author)
+        for idx in range(10):
+            print('\n----------Round {}----------'.format(idx + 1))
+            train_set, test_set = self.get_random_kfolds(train_set_size=0.8, seed=idx, authors=copy.deepcopy(authors))
 
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
@@ -298,19 +294,6 @@ class Model:
             print("Accuracy of Random forest is: {}".format(final_val))
             res_best['forest'].append(final_val)
 
-            result = defaultdict(list)
-            for learning_rate in range(1, 100):
-                for max_depth in range(2, 11):
-                    for reg_alpha in range(1, 10):
-                        xgboost = xgb.XGBClassifier(max_depth=max_depth, objective='binary:logistic',
-                                                    learning_rate=learning_rate / 100, reg_alpha=reg_alpha, booster='gbtree')
-                        xgboost.fit(X_train, y_train)
-                        xgboost_pred = xgboost.predict(X_test)
-                        result[(learning_rate / 100, max_depth, reg_alpha)].append(np.round(mx.accuracy_score(y_test, xgboost_pred), 2))
-            final_val = max(result.items(), key=lambda x: x[1])
-            print("Accuracy of XBoost is: {}".format(final_val))
-            res_best['xgboost'].append(final_val)
-
         print('----------Final Values----------')
         aggregate_val = defaultdict(list)
         for k, v in res_best.items():
@@ -337,7 +320,7 @@ if __name__ == '__main__':
     # full_df = pandas.DataFrame()
     for i in range(len(files)):
         print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
-        mscore = Model(all_labels[0], neural_model=True, fileName=files[i])
+        mscore = Model(all_labels[0], neural_model=False, fileName=files[i])
         mscore.get_data()
         features = mscore.select_best_features_chi2()
         b_features = list(features['Specs'])[:10]
@@ -352,7 +335,7 @@ if __name__ == '__main__':
 
         # df_temp = pandas.read_excel(files[i], encoding='ansi')
         # if i == 0:
-        #     full_df = pandas.concat([full_df, df_temp[['P.value.R', 'Direction.R', 'O.within.CI.R',
+        #     full_df = pandas.concat([full_df, df_temp[['DOI', 'P.value.R', 'Direction.R', 'O.within.CI.R',
         #                                                'Meta.analysis.significant', 'pvalue.label',
         #                                                'Authors.O']]], axis=1)
         #
