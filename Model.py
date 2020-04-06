@@ -6,12 +6,12 @@ from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test
 from sklearn.naive_bayes import GaussianNB
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import MinMaxScaler
-from sklearn.svm import SVC
 import numpy as np
 from tensorflow import keras
 import sklearn.metrics as mx
 from matplotlib import pyplot as plt
 import copy
+import pickle
 
 class Model:
     def __init__(self, label_type, neural_model, fileName):
@@ -23,7 +23,7 @@ class Model:
     def __score_model__(self, X_train, X_test, y_train, y_test, clf):
         clf.fit(X_train, y_train)
         y_pred = clf.predict(X_test)
-        return mx.accuracy_score(y_test, y_pred)
+        return mx.f1_score(y_test, y_pred)
 
     def ablation_test(self):
         self.__remove_unusable_features__()
@@ -31,42 +31,33 @@ class Model:
         y = self.df[self.label_type]
 
         gnb = GaussianNB()
-        svc = SVC(kernel='rbf', gamma=1, C=0.1, random_state=0)
         neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
 
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0)
 
         base_score = dict()
         base_score['gnb'] = self.__score_model__(X_train, X_test, y_train, y_test, gnb)
-        base_score['svc'] = self.__score_model__(X_train, X_test, y_train, y_test, svc)
         base_score['neigh'] = self.__score_model__(X_train, X_test, y_train, y_test, neigh)
 
         scores = defaultdict(list)
         for idx in range(X_train.shape[1]):
             cols = [ndx != idx for ndx in range(X_train.shape[1])]
             scores['gnb'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, gnb))
-            scores['svc'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, svc))
             scores['neigh'].append(self.__score_model__(X_train.iloc[:, cols], X_test.iloc[:, cols], y_train, y_test, neigh))
 
         final_scores_gnb = dict()
-        final_scores_svc = dict()
         final_scores_neigh = dict()
         for k, v in scores.items():
             if k == 'gnb':
                 for idx in range(len(v)):
                     final_scores_gnb[X.columns[idx]] = (v[idx] - base_score[k])
                 final_scores_gnb = sorted(final_scores_gnb.items(), key=lambda kv: kv[1], reverse=True)
-            elif k == 'svc':
-                for idx in range(len(v)):
-                    final_scores_svc[X.columns[idx]] = (v[idx] - base_score[k])
-                final_scores_svc = sorted(final_scores_svc.items(), key=lambda kv: kv[1], reverse=True)
             elif k == 'neigh':
                 for idx in range(len(v)):
                     final_scores_neigh[X.columns[idx]] = (v[idx] - base_score[k])
                 final_scores_neigh = sorted(final_scores_neigh.items(), key=lambda kv: kv[1], reverse=True)
 
         print('Based on Naive Bayes: ', final_scores_gnb)
-        print('Based on SVC : ', final_scores_svc)
         print('Based on KNN: ', final_scores_neigh)
 
     def __remove_unusable_features__(self):
@@ -148,12 +139,10 @@ class Model:
         skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
 
         gnb = GaussianNB()
-        svc = SVC(kernel='rbf', gamma=0.1, C=0.1, random_state=0)
         neigh = KNeighborsClassifier(n_neighbors=6, p=3, weights='uniform')
         forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=5, max_features='auto', max_depth=10,
                                                  min_samples_split=2, min_samples_leaf=1, bootstrap=True)
         print("Cross Validation Score of Naive Bayes is: %.2f" % np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
-        print("Cross Validation Score of SVC is: %.2f" % np.mean(cross_val_score(svc, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of KNN is: %.2f" % np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
         print("Cross Validation Score of Random Forest is: %.2f" % np.mean(cross_val_score(forest, X, y, cv=skf, n_jobs=1)))
 
@@ -178,9 +167,8 @@ class Model:
 
     def modelling_custom_kfolds(self, best_features):
         gnb = GaussianNB()
-        svc = SVC(kernel='rbf', gamma=0.1, C=0.1, random_state=0)
-        neigh = KNeighborsClassifier(n_neighbors=12, p=3, weights='uniform')
-        forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=7, max_depth=4, bootstrap=True)
+        neigh = KNeighborsClassifier(n_neighbors=9, p=2, weights='uniform')
+        forest = ensemble.RandomForestClassifier(random_state=0, bootstrap=True)
         model = None
         if self.neural_model:
             model = keras.Sequential([
@@ -210,19 +198,15 @@ class Model:
 
             gnb.fit(X_train, y_train)
             gnb_pred = gnb.predict(X_test)
-            result['gnb'].append(mx.accuracy_score(y_test, gnb_pred))
-
-            svc.fit(X_train, y_train)
-            svc_pred = svc.predict(X_test)
-            result['svc'].append(mx.accuracy_score(y_test, svc_pred))
+            result['gnb'].append(mx.f1_score(y_test, gnb_pred))
 
             neigh.fit(X_train, y_train)
             neigh_pred = neigh.predict(X_test)
-            result['neigh'].append(mx.accuracy_score(y_test, neigh_pred))
+            result['neigh'].append(mx.f1_score(y_test, neigh_pred))
 
             forest.fit(X_train, y_train)
             forest_pred = forest.predict(X_test)
-            result['forest'].append(mx.accuracy_score(y_test, forest_pred))
+            result['forest'].append(mx.f1_score(y_test, forest_pred))
 
             if self.neural_model:
                 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -231,11 +215,17 @@ class Model:
                 result['neuralNetwork'].append(accuracy)
 
         print("Accuracy of Naive Bayes is: %0.2f" % np.mean(result['gnb']))
-        print("Accuracy of SVC is: %0.2f" % np.mean(result['svc']))
         print("Accuracy of KNN is: %0.2f" % np.mean(result['neigh']))
         print("Accuracy of Random Forest is: %0.2f" % np.mean(result['forest']))
         if self.neural_model:
             print("Accuracy of Neural Network is: %0.2f" % np.mean(result['neuralNetwork']))
+
+        print('-----Storing Models-----')
+        f = open('Covid/data/models.pkl', 'wb')
+        pickle.dump(gnb, f)
+        pickle.dump(neigh, f)
+        pickle.dump(forest, f)
+        f.close()
 
     def tuning_hyperparameters(self, best_features):
         res_best = defaultdict(list)
@@ -258,26 +248,12 @@ class Model:
             y_test = y_test.astype('int')
 
             result = defaultdict(list)
-            gamma_val = c_val = 0.01
-            while gamma_val < 10:
-                while c_val < 10:
-                    svc = SVC(kernel='rbf', gamma=gamma_val, C=c_val, random_state=0)
-                    svc.fit(X_train, y_train)
-                    svc_pred = svc.predict(X_test)
-                    result[(gamma_val, c_val)].append(np.round(mx.accuracy_score(y_test, svc_pred), 2))
-                    c_val += 0.01
-                gamma_val += 0.01
-            final_val = max(result.items(), key=lambda x: x[1])
-            print("Accuracy of SVC is: {}".format(final_val))
-            res_best['svc'].append(final_val)
-
-            result = defaultdict(list)
             for n_neighbors_val in range(3, 15):
                 for p_val in range(1, 6):
                     neigh = KNeighborsClassifier(n_neighbors=n_neighbors_val, p=p_val, weights='uniform')
                     neigh.fit(X_train, y_train)
                     neigh_pred = neigh.predict(X_test)
-                    result[(n_neighbors_val, p_val)].append(np.round(mx.accuracy_score(y_test, neigh_pred), 2))
+                    result[(n_neighbors_val, p_val)].append(np.round(mx.f1_score(y_test, neigh_pred), 2))
             final_val = max(result.items(), key=lambda x: x[1])
             print("Accuracy of KNN is: {}".format(final_val))
             res_best['knn'].append(final_val)
@@ -289,7 +265,7 @@ class Model:
                                                              bootstrap=True)
                     forest.fit(X_train, y_train)
                     forest_pred = forest.predict(X_test)
-                    result[(n_estimators, max_depth)].append(np.round(mx.accuracy_score(y_test, forest_pred), 2))
+                    result[(n_estimators, max_depth)].append(np.round(mx.f1_score(y_test, forest_pred), 2))
             final_val = max(result.items(), key=lambda x: x[1])
             print("Accuracy of Random forest is: {}".format(final_val))
             res_best['forest'].append(final_val)
@@ -315,21 +291,20 @@ class Model:
 
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    files = ['data/final_references_wos_data.xlsx', 'data/final_references_mag_data.xlsx',
-             'data/final_citations_mag_data.xlsx', 'data/final_bestfeatures_data.xlsx']
+    files = ['data/final_references_mag_data.xlsx']
     # full_df = pandas.DataFrame()
     for i in range(len(files)):
         print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
-        mscore = Model(all_labels[0], neural_model=False, fileName=files[i])
+        mscore = Model(all_labels[2], neural_model=False, fileName=files[i])
         mscore.get_data()
         features = mscore.select_best_features_chi2()
-        b_features = list(features['Specs'])[:10]
-        if i < len(files) - 1:
-            # mscore.modelling(b_features)
-            mscore.modelling_custom_kfolds(b_features)
-        else:
-            # mscore.modelling(list(features['Specs']))
-            mscore.modelling_custom_kfolds(list(features['Specs']))
+        b_features = list(features['Specs'])[: 10]
+        # for i_x in ['Citation.count.senior.author.O', 'Citation.Count.1st.author.O', 'Citation.count.paper.O',
+        #             'Surprising.result.O', 'Effect.size.O', 'Institution.prestige.1st.author.O', 'N.O',
+        #             'Institution.prestige.senior.author.O', 'Exciting.result.O', 'Number.of.Authors.O']:
+        #     b_features.remove(i_x)
+        # mscore.modelling(b_features)
+        mscore.modelling_custom_kfolds(b_features)
 
         # mscore.tuning_hyperparameters(b_features)
 

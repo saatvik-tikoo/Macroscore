@@ -34,10 +34,7 @@ class NetworkFetaures:
                         lines_dict[mappings[vals[0]]] = vals[1:]
 
             for _, row in self.df.iterrows():
-                if 'wos' in self.graph_type:
-                    doi = row['DOI'].replace('/', '_')
-                else:
-                    doi = row['DOI']
+                doi = row['DOI']
                 idx = 0
                 if doi in lines_dict:
                     fields = lines_dict[doi]
