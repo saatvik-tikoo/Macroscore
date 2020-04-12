@@ -6,16 +6,18 @@ import pickle
 import json
 import numpy as np
 
-SYNTHETIC_EDGES_SIZE = 0
+SYNTHETIC_EDGES_SIZE = 1
 class NetworkGraph:
-    def __init__(self):
+    def __init__(self, reproducible=[], oracle=True):
         self.path_head = '../DataExtraction/WOS/RPPdataConverted'
         self.df = None
+        self.reproducible = reproducible
+        self.oracle = oracle
 
     def get_data(self, features=['DOI', 'Study.Title.O']):
         self.df = pd.read_excel('data/new_data.xlsx', encoding='ansi', usecols=features)
 
-    def __graph_wos__(self, g, DOIS, hops, reproducible):
+    def __graph_wos__(self, g, DOIS, hops):
         if hops == 0:
             return
         print('---------Running for {} hop---------'.format(hops))
@@ -34,19 +36,24 @@ class NetworkGraph:
                         g.add_edge(doi, citation_row['DI'])
 
             # Adding Synthetic edges
-            if hops == 2 and doi not in reproducible:
-                randoms = np.random.randint(len(reproducible), size=SYNTHETIC_EDGES_SIZE)
+            if hops == 2 and doi not in self.reproducible:
+                if self.oracle:
+                    paper_check = self.reproducible
+                else:
+                    paper_check = list(DOIS)
+                    paper_check.remove(doi)
+                randoms = np.random.randint(len(paper_check), size=SYNTHETIC_EDGES_SIZE)
                 for ppr_idx in randoms:
-                    g.add_edge(doi, reproducible[ppr_idx])
+                    g.add_edge(doi, paper_check[ppr_idx])
 
         print('Number of DOIs for next hop ', len(new_dois))
-        self.__graph_wos__(g, new_dois, hops - 1, reproducible)
+        self.__graph_wos__(g, new_dois, hops - 1)
 
-    def graph_wos(self, reproducible, hops=2):
+    def graph_wos(self, hops=2):
         # Based on WOS data
         g = nx.DiGraph()
         self.df.dropna(subset=['DOI'])
-        self.__graph_wos__(g, set(self.df['DOI']), hops, reproducible)
+        self.__graph_wos__(g, set(self.df['DOI']), hops)
         # print('---------Getting betweenness---------')
         # betweenness_dict = nx.betweenness_centrality(g)
         # nx.set_node_attributes(g, betweenness_dict, 'betweenness')
@@ -80,13 +87,19 @@ class NetworkGraph:
 
             # Adding Synthetic edges
             if hops == 2 and cur_id not in reproducible:
-                randoms = np.random.randint(len(reproducible), size=SYNTHETIC_EDGES_SIZE)
+                if self.oracle:
+                    paper_check = reproducible.copy()
+                else:
+                    paper_check = list(IDS)
+                    paper_check.remove(cur_id)
+                randoms = np.random.randint(len(paper_check), size=SYNTHETIC_EDGES_SIZE)
                 for ppr_idx in randoms:
-                    g.add_edge(cur_id, reproducible[ppr_idx])
+                    g.add_edge(cur_id, paper_check[ppr_idx])
+
         print('Number of DOIs for next hop ', len(new_IDS))
         self.__graph_mag__(g, set(new_IDS), df_citations, graph_type, hops - 1, reproducible)
 
-    def graph_mag(self, reproducible, graph_type='references', hops=2):
+    def graph_mag(self, graph_type='references', hops=2):
         # Based on MAG data
         g = nx.DiGraph()
         self.df.dropna(subset=['DOI'])
@@ -100,7 +113,7 @@ class NetworkGraph:
             if doi in mappings:
                 IDS[mappings[doi][0]] = doi
                 # Get ids for reproducible papers to generate synthetic edges
-                if doi in reproducible:
+                if doi in self.reproducible:
                     reproducible_ids.append(mappings[doi][0])
 
         self.__graph_mag__(g, IDS.keys(), df_citations, graph_type, 2, reproducible_ids)
@@ -130,16 +143,17 @@ class NetworkGraph:
 
 def separate_papers():
     df = pd.read_excel('data/new_data.xlsx')
-    reproducible = [row['DOI'] for idx, row in df.iterrows() if not pd.isna(row['DOI']) and row['pvalue.label'] == 1]
+    all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
+    reproducible = [row['DOI'] for idx, row in df.iterrows() if not pd.isna(row['DOI']) and row[all_labels[2]] == 1]
     return reproducible
 
 
 if __name__ == '__main__':
-    cnn = NetworkGraph()
     rep = separate_papers()
+    cnn = NetworkGraph(reproducible=rep, oracle=False)
     cnn.get_data()
     # WOS data has only option of getting references. So only option we can change is number of hops
-    # cnn.graph_wos(reproducible=rep, hops=2)
+    cnn.graph_wos(hops=2)
 
     # Mag data has two options for generating the graph_type='references' and 'citations', Also we can set the number of hops
-    cnn.graph_mag(reproducible=rep, graph_type='references', hops=2)
+    # cnn.graph_mag(graph_type='citations', hops=2)

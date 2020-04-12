@@ -167,8 +167,8 @@ class Model:
 
     def modelling_custom_kfolds(self, best_features):
         gnb = GaussianNB()
-        neigh = KNeighborsClassifier(n_neighbors=9, p=2, weights='uniform')
-        forest = ensemble.RandomForestClassifier(random_state=0, bootstrap=True)
+        neigh = KNeighborsClassifier(n_neighbors=10, p=2, weights='uniform')
+        forest = ensemble.RandomForestClassifier(n_estimators=100, max_depth=7, random_state=0, bootstrap=True)
         model = None
         if self.neural_model:
             model = keras.Sequential([
@@ -291,7 +291,8 @@ class Model:
 
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    files = ['data/final_references_mag_data.xlsx']
+    path = 'data/'
+    files = [path + 'final_references_mag_data.xlsx']
     # full_df = pandas.DataFrame()
     for i in range(len(files)):
         print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
@@ -299,10 +300,6 @@ if __name__ == '__main__':
         mscore.get_data()
         features = mscore.select_best_features_chi2()
         b_features = list(features['Specs'])[: 10]
-        # for i_x in ['Citation.count.senior.author.O', 'Citation.Count.1st.author.O', 'Citation.count.paper.O',
-        #             'Surprising.result.O', 'Effect.size.O', 'Institution.prestige.1st.author.O', 'N.O',
-        #             'Institution.prestige.senior.author.O', 'Exciting.result.O', 'Number.of.Authors.O']:
-        #     b_features.remove(i_x)
         # mscore.modelling(b_features)
         mscore.modelling_custom_kfolds(b_features)
 
