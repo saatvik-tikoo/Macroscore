@@ -3,14 +3,9 @@ extras
 .idea
 __pycache__
 .ipynb_checkpoints
-data/MAG_data
-data/RPPdataConverted_2hop
 data/*.gexf
 data/*.gpickle
 data/*.pkl
 data/*.emb
-Covid/data/CORD_19
-Covid/data/covid19_kb/*.emb
-Covid/data/covid19_kb/*.gexf
-Covid/data/covid19_kb/*.gpickle
-Covid/data/covid19_kb/kg.nt
+data/kg.nt
+test.py
