@@ -3,9 +3,4 @@ extras
 .idea
 __pycache__
 .ipynb_checkpoints
-data/*.gexf
-data/*.gpickle
-data/*.pkl
-data/*.emb
-data/kg.nt
-test.py
+data/*

@@ -1,37 +1,35 @@
 import pandas as pd
-import urllib.parse
+import pickle
+import json
 
-if __name__ == '__main__':
-    data = pd.read_csv('data/CORD_19/metadata.csv', usecols=['doi'])
-    embedding_filenames = ['data/covid19_kb/node2vec_2hops.emb', 'data/covid19_kb/node2vec_whole.emb']
-    final_filenames = ['data/covid19_kb/finaldata_2hops.xlsx', 'data/covid19_kb/finaldata_whole.xlsx']
+my_dict = dict()
+with open('data/doi_to_id_mappings.json') as infile:
+    data = json.load(infile)
+    for obj in data:
+        my_dict[obj['id']] = obj['doi']
 
-    for idx, file in enumerate(embedding_filenames):
-        print('-----For File {}-----'.format(file))
-        with open(file, 'r') as f_read:
-            df = data.copy()
-            lines = f_read.readlines()
-            lines_dict = dict()
-            cnt_total = cnt_available = 0
-            print('-----Generating Dictionary-----')
-            for idx_l, line in enumerate(lines):
-                if idx_l > 0:
-                    vals = line.split(' ')
-                    vals[0] = urllib.parse.unquote(vals[0])
-                    lines_dict[vals[0]] = vals[1:]
-            print('-----Adding Rows-----')
-            for i, row in df.iterrows():
-                doi = row['doi']
-                if doi in lines_dict:
-                    cnt_available += 1
-                    fields = lines_dict[doi]
-                    for _, col in enumerate(fields):
-                        df.at[i, 'new_feature_' + str(_ + 1)] = col
+with open('data/doi_id_dict.pickle', 'wb') as handle:
+    pickle.dump(my_dict, handle)
 
-                cnt_total += 1
-                if cnt_total % 1000 == 0:
-                    print('Total Rows checked: {} and total found till now: {}'.format(cnt_total, cnt_available))
-            print('-----Saving File-----')
-            df.dropna(inplace=True)
-            print(df.shape)
-            df.to_excel(final_filenames[idx])
+embedding_filenames = ['data/node2vec_references_network_2hops.emb']
+final_filenames = ['data/finalData.xlsx']
+final_data = []
+with open(embedding_filenames[0]) as f_read:
+    lines = f_read.readlines()
+    print('-----Generating Dictionary-----')
+    for idx_l, line in enumerate(lines):
+        if idx_l > 0:
+            vals = line.split(' ')
+            if vals[0] in my_dict:
+                cur_obj = {
+                    'doi': my_dict[vals[0]]
+                }
+                for _, col in enumerate(vals[1:]):
+                    cur_obj['new_feature_' + str(_ + 1)] = col
+                final_data.append(cur_obj)
+
+df = pd.DataFrame(final_data)
+print('-----Saving File-----')
+df.dropna(subset=['new_feature_1'], inplace=True)
+print(df.shape)
+df.to_excel(final_filenames[0])
