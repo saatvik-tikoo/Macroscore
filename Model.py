@@ -1,5 +1,5 @@
 from collections import defaultdict
-import pandas
+import pandas as pd
 from sklearn import ensemble
 from sklearn.feature_selection import SelectKBest, chi2
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
@@ -12,6 +12,7 @@ import sklearn.metrics as mx
 from matplotlib import pyplot as plt
 import copy
 import pickle
+
 
 class Model:
     def __init__(self, label_type, neural_model, fileName):
@@ -67,7 +68,7 @@ class Model:
         elif self.label_type == 'O.within.CI.R':
             self.df = self.df.drop(['P.value.R', 'Direction.R', 'Meta.analysis.significant', 'pvalue.label'], axis=1)
         elif self.label_type == 'Meta.analysis.significant':
-            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'pvalue.label'], axis=1)
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R'], axis=1)
 
         cols_drop = {'DOI', '1st.author.O', 'Senior.author.O', 'Study.Title.O', 'Unnamed: 0', 'Unnamed: 0.1', 'Volume.O'}
         cols_total = set(self.df.columns)
@@ -95,24 +96,24 @@ class Model:
         y = self.df[self.label_type]
         bestfeatures = SelectKBest(score_func=chi2, k='all')
         fit = bestfeatures.fit(X, y)
-        dfscores = pandas.DataFrame(fit.scores_)
-        dfcolumns = pandas.DataFrame(cols)
-        featureScores = pandas.concat([dfcolumns, dfscores], axis=1)
+        dfscores = pd.DataFrame(fit.scores_)
+        dfcolumns = pd.DataFrame(cols)
+        featureScores = pd.concat([dfcolumns, dfscores], axis=1)
         featureScores.columns = ['Specs', 'Score']
         final_features = featureScores.nlargest(featureScores.shape[0] - 2, 'Score')
-        pandas.set_option('display.max_rows', final_features.shape[0] + 1)
+        pd.set_option('display.max_rows', final_features.shape[0] + 1)
         return final_features
 
     def get_random_kfolds(self, train_set_size=0.9, seed=0, authors=None):
         if authors is None:
             return
         df = self.df.copy()
-        train_set, test_set = pandas.DataFrame(columns=list(df.columns)), pandas.DataFrame(columns=list(df.columns))
+        train_set, test_set = pd.DataFrame(columns=list(df.columns)), pd.DataFrame(columns=list(df.columns))
         while len(train_set) <= self.df.shape[0] * train_set_size and len(authors) > 0 and df.shape[0] > 0:
             np.random.seed(seed)
             author = authors[np.random.randint(0, len(authors))]
             temp_df = df.loc[df['Authors.O'].str.contains(author, case=False)]
-            train_set = pandas.concat([train_set, temp_df], ignore_index=True)
+            train_set = pd.concat([train_set, temp_df], ignore_index=True)
             authors.remove(author)
 
             # remove all the rows from df that have been added to the new set
@@ -122,7 +123,7 @@ class Model:
                 np.random.seed(seed)
                 author = authors[np.random.randint(0, len(authors))]
                 temp_df = df.loc[df['Authors.O'].str.contains(author, case=False)]
-                test_set = pandas.concat([test_set, temp_df], ignore_index=True)
+                test_set = pd.concat([test_set, temp_df], ignore_index=True)
                 authors.remove(author)
 
                 # remove all the rows from df that have been added to the new set
@@ -220,12 +221,12 @@ class Model:
         if self.neural_model:
             print("Accuracy of Neural Network is: %0.2f" % np.mean(result['neuralNetwork']))
 
-        print('-----Storing Models-----')
-        f = open('Covid/data/models.pkl', 'wb')
-        pickle.dump(gnb, f)
-        pickle.dump(neigh, f)
-        pickle.dump(forest, f)
-        f.close()
+        # print('-----Storing Models-----')
+        # f = open('Covid/data/models.pkl', 'wb')
+        # pickle.dump(gnb, f)
+        # pickle.dump(neigh, f)
+        # pickle.dump(forest, f)
+        # f.close()
 
     def tuning_hyperparameters(self, best_features):
         res_best = defaultdict(list)
@@ -284,33 +285,51 @@ class Model:
             print('Best Possible Values for {} are: {}'.format(k, aggregate_val[k]))
 
     def get_data(self):
-        self.df = pandas.read_excel(self.fileName, encoding='ansi')
+        self.df = pd.read_excel(self.fileName, encoding='ansi')
         self.__remove_unusable_features__()
         self.__get_baseline__()
 
 
+def mergeAllFeatures(f_read, f_write):
+    df = pd.read_excel(f_read[0], encoding='ansi')
+    cols_drop = set(df.columns)
+    res = df.copy()
+    for f_idx in range(1, len(f_read)):
+        df_inner = pd.read_excel(f_read[f_idx], encoding='ansi')
+        df_inner.drop(cols_drop.intersection(set(df_inner.columns)), inplace=True, axis=1)
+        res = pd.concat([res, df_inner], axis=1)
+    res.to_excel(f_write)
+
+
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    path = 'data/'
-    files = [path + 'final_references_mag_data.xlsx']
-    # full_df = pandas.DataFrame()
-    for i in range(len(files)):
-        print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
-        mscore = Model(all_labels[2], neural_model=False, fileName=files[i])
+    # 4 Files: Original_Features, Mag_references, Mag_citations, Best of all 3, Kexuan's Fetaures, Best of all 4
+    files = ['data/originalAndNetwork.xlsx', 'data/originalAndNetworkAndKexuan.xlsx']
+    # mergeAllFeatures(files[: 3], 'data/originalAndNetwork.xlsx')
+    # mergeAllFeatures(files[: 4], 'data/originalAndNetworkAndKexuan.xlsx')
+    trial = ['data/final_references_mag_data.xlsx', 'data/final_citations_mag_data.xlsx']
+    mergeAllFeatures(trial, 'data/bestFeatures.xlsx')
+    new_files = ['data/bestFeatures.xlsx']
+    b_features = []
+    for i in range(len(trial)):
+        print('----------------Results for {} file----------------'.format(trial[i].split('.')[0]))
+        mscore = Model(all_labels[2], neural_model=False, fileName=trial[i])
         mscore.get_data()
         features = mscore.select_best_features_chi2()
-        b_features = list(features['Specs'])[: 10]
-        # mscore.modelling(b_features)
-        mscore.modelling_custom_kfolds(b_features)
+        b_features.extend(list(features['Specs'])[:10])
 
-        # mscore.tuning_hyperparameters(b_features)
+    df = ['feature_1', 'feature_2', 'feature_3', 'feature_4', 'feature_5', 'feature_6', 'feature_7', 'feature_8']
+    b_features.extend(df)
+    print(b_features)
+    mscore = Model(all_labels[2], neural_model=False, fileName='data/originalAndNetworkAndKexuan.xlsx')
+    mscore.get_data()
+    mscore.modelling_custom_kfolds(b_features)
 
-        # df_temp = pandas.read_excel(files[i], encoding='ansi')
-        # if i == 0:
-        #     full_df = pandas.concat([full_df, df_temp[['DOI', 'P.value.R', 'Direction.R', 'O.within.CI.R',
-        #                                                'Meta.analysis.significant', 'pvalue.label',
-        #                                                'Authors.O']]], axis=1)
-        #
-        # full_df = pandas.concat([full_df, df_temp[b_features]], axis=1)
-    # full_df.to_excel('data/final_bestfeatures_data.xlsx')
-
+    # for i in range(len(files)):
+    #     print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
+    #     mscore = Model(all_labels[2], neural_model=False, fileName=files[i])
+    #     mscore.get_data()
+    #     features = mscore.select_best_features_chi2()
+    #     b_features = list(features['Specs'])
+    #     print(b_features)
+    #     mscore.modelling_custom_kfolds(b_features)

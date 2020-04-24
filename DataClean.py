@@ -189,8 +189,8 @@ if __name__ == '__main__':
                    'Institution.prestige.1st.author.O', 'Institution.prestige.senior.author.O', 'O.within.CI.R', 'P.value.R',
                    'Direction.R', 'Meta.analysis.significant', 'Citation.count.senior.author.O', '1st.author.O',
                    'Senior.author.O']
-
-    mscore = Macroscore('pvalue.label', feature_type='common', specify_features=True, features=req_columns,
+    label_type = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
+    mscore = Macroscore(label_type[2], feature_type='common', specify_features=True, features=req_columns,
                         fileName='data/RPPdata.xlsx')
     mscore.get_data()
     mscore.get_feature()

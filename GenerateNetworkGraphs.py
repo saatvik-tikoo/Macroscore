@@ -6,7 +6,7 @@ import pickle
 import json
 import numpy as np
 
-SYNTHETIC_EDGES_SIZE = 1
+SYNTHETIC_EDGES_SIZE = 0
 class NetworkGraph:
     def __init__(self, reproducible=[], oracle=True):
         self.path_head = '../DataExtraction/WOS/RPPdataConverted'
@@ -36,7 +36,7 @@ class NetworkGraph:
                         g.add_edge(doi, citation_row['DI'])
 
             # Adding Synthetic edges
-            if hops == 2 and doi not in self.reproducible:
+            if hops == 2 and doi not in self.reproducible and SYNTHETIC_EDGES_SIZE > 0:
                 if self.oracle:
                     paper_check = self.reproducible
                 else:
@@ -65,7 +65,7 @@ class NetworkGraph:
         print('Number of nodes in the graph: ', len(g.nodes()))
         print('Number of edges in the graph: ', len(g.edges()))
         nx.write_gpickle(g, 'data/references_network_{}hops_wos.gpickle'.format(hops))
-        nx.write_gexf(g, "data/references_network_{}hops_wos.gexf".format(hops))
+        # nx.write_gexf(g, "data/references_network_{}hops_wos.gexf".format(hops))
         print('-------------Graph Saved--------------')
 
     def __graph_mag__(self, g, IDS, df_citations, graph_type, hops, reproducible):
@@ -86,7 +86,7 @@ class NetworkGraph:
             new_IDS.extend(new_nodes)
 
             # Adding Synthetic edges
-            if hops == 2 and cur_id not in reproducible:
+            if hops == 2 and cur_id not in reproducible and SYNTHETIC_EDGES_SIZE > 0:
                 if self.oracle:
                     paper_check = reproducible.copy()
                 else:
@@ -128,7 +128,7 @@ class NetworkGraph:
         print('Number of nodes in the graph: ', len(g.nodes()))
         print('Number of edges in the graph: ', len(g.edges()))
         nx.write_gpickle(g, 'data/{}_network_{}hops_mag.gpickle'.format(graph_type, hops))
-        nx.write_gexf(g, "data/{}_network_{}hops_mag.gexf".format(graph_type, hops))
+        # nx.write_gexf(g, "data/{}_network_{}hops_mag.gexf".format(graph_type, hops))
         pickle.dump(IDS, open('data/IDS_doi_mapping_{}.pkl'.format(graph_type), 'wb'))
         print('-------------Graph Saved--------------')
 
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     cnn = NetworkGraph(reproducible=rep, oracle=False)
     cnn.get_data()
     # WOS data has only option of getting references. So only option we can change is number of hops
-    cnn.graph_wos(hops=2)
+    # cnn.graph_wos(hops=2)
 
     # Mag data has two options for generating the graph_type='references' and 'citations', Also we can set the number of hops
-    # cnn.graph_mag(graph_type='citations', hops=2)
+    cnn.graph_mag(graph_type='references', hops=2)

@@ -14,7 +14,9 @@ class NetworkFetaures:
         self.graph_type = graph_type
 
     def get_data(self):
-        self.df = pd.read_excel('data/new_data.xlsx', encoding='ansi', )
+        self.df = pd.read_excel('data/new_data.xlsx', encoding='ansi', usecols=['DOI', 'P.value.R', 'Direction.R',
+                                                                                'O.within.CI.R', 'Authors.O',
+                                                                                'Meta.analysis.significant'])
 
     def addNetworkFeatures(self):
         with open(self.file, 'r') as f_read:
