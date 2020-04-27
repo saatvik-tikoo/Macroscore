@@ -9,3 +9,4 @@ data/*.pkl
 data/*.emb
 data/kg.nt
 test.py
+data/meatadata.csv
