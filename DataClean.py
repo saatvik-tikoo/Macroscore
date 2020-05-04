@@ -194,3 +194,5 @@ if __name__ == '__main__':
                         fileName='data/RPPdata.xlsx')
     mscore.get_data()
     mscore.get_feature()
+    print('Successful')
+

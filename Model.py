@@ -15,10 +15,11 @@ import pickle
 
 
 class Model:
-    def __init__(self, label_type, neural_model, fileName):
+    def __init__(self, label_type, neural_model, fileName, folds):
         self.label_type = label_type
         self.neural_model = neural_model
         self.fileName = fileName
+        self.folds = folds
         self.df = None
 
     def __score_model__(self, X_train, X_test, y_train, y_test, clf):
@@ -228,17 +229,67 @@ class Model:
         # pickle.dump(forest, f)
         # f.close()
 
+    def train_test_cv_split(self, index):
+        test_set = self.df.loc[self.df['Fold_Id'] == index]
+        train_set = self.df.loc[self.df.index.difference(test_set.index)]
+        return train_set, test_set
+
+    def modelling_modified_custom_kfolds(self, best_features):
+        self.df = self.df.drop(['Authors.O'], axis=1)
+        gnb = GaussianNB()
+        neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
+        forest = ensemble.RandomForestClassifier(n_estimators=100, max_depth=4, random_state=0, bootstrap=True)
+        model = None
+        if self.neural_model:
+            model = keras.Sequential([
+                keras.layers.Dense(32, input_dim=len(best_features), activation='sigmoid'),
+                keras.layers.Dense(16, activation='sigmoid'),
+                keras.layers.Dense(32, activation='sigmoid'),
+                keras.layers.Dense(8, activation='sigmoid'),
+                keras.layers.Dense(1, activation='sigmoid')
+            ])
+        result = defaultdict(list)
+        for idx in range(self.folds):
+            train_set, test_set = self.train_test_cv_split(i + 1)
+
+            X_train = train_set[best_features]
+            y_train = train_set[self.label_type]
+            y_train = y_train.astype('int')
+
+            X_test = test_set[best_features]
+            y_test = test_set[self.label_type]
+            y_test = y_test.astype('int')
+
+            gnb.fit(X_train, y_train)
+            gnb_pred = gnb.predict(X_test)
+            result['gnb'].append(mx.f1_score(y_test, gnb_pred))
+
+            neigh.fit(X_train, y_train)
+            neigh_pred = neigh.predict(X_test)
+            result['neigh'].append(mx.f1_score(y_test, neigh_pred))
+
+            forest.fit(X_train, y_train)
+            forest_pred = forest.predict(X_test)
+            result['forest'].append(mx.f1_score(y_test, forest_pred))
+
+            if self.neural_model:
+                model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+                model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
+                _, accuracy = model.evaluate(X_test, y_test)
+                result['neuralNetwork'].append(accuracy)
+
+        print("Accuracy of Naive Bayes is: %0.2f" % np.mean(result['gnb']))
+        print("Accuracy of KNN is: %0.2f" % np.mean(result['neigh']))
+        print("Accuracy of Random Forest is: %0.2f" % np.mean(result['forest']))
+        if self.neural_model:
+            print("Accuracy of Neural Network is: %0.2f" % np.mean(result['neuralNetwork']))
+
     def tuning_hyperparameters(self, best_features):
         res_best = defaultdict(list)
-        authors = []
-        for au in list(self.df['Authors.O']):
-            for j in au.split(','):
-                author = j.strip().lower()
-                if author not in authors:
-                    authors.append(author)
-        for idx in range(10):
+
+        for idx in range(self.folds):
             print('\n----------Round {}----------'.format(idx + 1))
-            train_set, test_set = self.get_random_kfolds(train_set_size=0.8, seed=idx, authors=copy.deepcopy(authors))
+            train_set, test_set = self.train_test_cv_split(i + 1)
 
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
@@ -260,13 +311,12 @@ class Model:
             res_best['knn'].append(final_val)
 
             result = defaultdict(list)
-            for n_estimators in range(2, 11):
-                for max_depth in range(2, 11):
-                    forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=n_estimators, max_depth=max_depth,
-                                                             bootstrap=True)
-                    forest.fit(X_train, y_train)
-                    forest_pred = forest.predict(X_test)
-                    result[(n_estimators, max_depth)].append(np.round(mx.f1_score(y_test, forest_pred), 2))
+            for max_depth in range(2, 11):
+                forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=100, max_depth=max_depth,
+                                                         bootstrap=True)
+                forest.fit(X_train, y_train)
+                forest_pred = forest.predict(X_test)
+                result[(100, max_depth)].append(np.round(mx.f1_score(y_test, forest_pred), 2))
             final_val = max(result.items(), key=lambda x: x[1])
             print("Accuracy of Random forest is: {}".format(final_val))
             res_best['forest'].append(final_val)
@@ -303,33 +353,15 @@ def mergeAllFeatures(f_read, f_write):
 
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    # 4 Files: Original_Features, Mag_references, Mag_citations, Best of all 3, Kexuan's Fetaures, Best of all 4
-    files = ['data/originalAndNetwork.xlsx', 'data/originalAndNetworkAndKexuan.xlsx']
+    files = ['data/final_references_wos_data.xlsx', 'data/final_references_mag_data.xlsx',
+             'data/final_citations_mag_data.xlsx']
     # mergeAllFeatures(files[: 3], 'data/originalAndNetwork.xlsx')
     # mergeAllFeatures(files[: 4], 'data/originalAndNetworkAndKexuan.xlsx')
-    trial = ['data/final_references_mag_data.xlsx', 'data/final_citations_mag_data.xlsx']
-    mergeAllFeatures(trial, 'data/bestFeatures.xlsx')
-    new_files = ['data/bestFeatures.xlsx']
-    b_features = []
-    for i in range(len(trial)):
-        print('----------------Results for {} file----------------'.format(trial[i].split('.')[0]))
-        mscore = Model(all_labels[2], neural_model=False, fileName=trial[i])
+
+    for i in range(len(files)):
+        print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
+        mscore = Model(all_labels[2], neural_model=False, fileName=files[i], folds=10)
         mscore.get_data()
         features = mscore.select_best_features_chi2()
-        b_features.extend(list(features['Specs'])[:10])
-
-    df = ['feature_1', 'feature_2', 'feature_3', 'feature_4', 'feature_5', 'feature_6', 'feature_7', 'feature_8']
-    b_features.extend(df)
-    print(b_features)
-    mscore = Model(all_labels[2], neural_model=False, fileName='data/originalAndNetworkAndKexuan.xlsx')
-    mscore.get_data()
-    mscore.modelling_custom_kfolds(b_features)
-
-    # for i in range(len(files)):
-    #     print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
-    #     mscore = Model(all_labels[2], neural_model=False, fileName=files[i])
-    #     mscore.get_data()
-    #     features = mscore.select_best_features_chi2()
-    #     b_features = list(features['Specs'])
-    #     print(b_features)
-    #     mscore.modelling_custom_kfolds(b_features)
+        b_features = list(features['Specs'])[:10]
+        mscore.modelling_modified_custom_kfolds(b_features)
