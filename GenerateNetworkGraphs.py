@@ -153,7 +153,7 @@ if __name__ == '__main__':
     cnn = NetworkGraph(reproducible=rep, oracle=False)
     cnn.get_data()
     # WOS data has only option of getting references. So only option we can change is number of hops
-    cnn.graph_wos(hops=2)
+    # cnn.graph_wos(hops=2)
 
     # Mag data has two options for generating the graph_type='references' and 'citations', Also we can set the number of hops
-    # cnn.graph_mag(graph_type='citations', hops=2)
+    cnn.graph_mag(graph_type='citations', hops=2)
