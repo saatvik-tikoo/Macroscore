@@ -64,8 +64,8 @@ class NetworkGraph:
         print('-------------Saving Graph--------------')
         print('Number of nodes in the graph: ', len(g.nodes()))
         print('Number of edges in the graph: ', len(g.edges()))
-        nx.write_gpickle(g, 'data/references_network_{}hops_wos.gpickle'.format(hops))
-        nx.write_gexf(g, "data/references_network_{}hops_wos.gexf".format(hops))
+        nx.write_gpickle(g, 'data/references_network_{}hops_wos_{}.gpickle'.format(hops, SYNTHETIC_EDGES_SIZE))
+        nx.write_gexf(g, "data/references_network_{}hops_wos_{}.gexf".format(hops, SYNTHETIC_EDGES_SIZE))
         print('-------------Graph Saved--------------')
 
     def __graph_mag__(self, g, IDS, df_citations, graph_type, hops, reproducible):
@@ -127,8 +127,8 @@ class NetworkGraph:
         print('-------------Saving Graph--------------')
         print('Number of nodes in the graph: ', len(g.nodes()))
         print('Number of edges in the graph: ', len(g.edges()))
-        nx.write_gpickle(g, 'data/{}_network_{}hops_mag.gpickle'.format(graph_type, hops))
-        nx.write_gexf(g, "data/{}_network_{}hops_mag.gexf".format(graph_type, hops))
+        nx.write_gpickle(g, 'data/{}_network_{}hops_mag_synthetic_{}.gpickle'.format(graph_type, hops, SYNTHETIC_EDGES_SIZE))
+        nx.write_gexf(g, "data/{}_network_{}hops_mag_{}.gexf".format(graph_type, hops, SYNTHETIC_EDGES_SIZE))
         pickle.dump(IDS, open('data/IDS_doi_mapping_{}.pkl'.format(graph_type), 'wb'))
         print('-------------Graph Saved--------------')
 
@@ -150,7 +150,7 @@ def separate_papers():
 
 if __name__ == '__main__':
     rep = separate_papers()
-    cnn = NetworkGraph(reproducible=rep, oracle=False)
+    cnn = NetworkGraph(reproducible=rep, oracle=True)
     cnn.get_data()
     # WOS data has only option of getting references. So only option we can change is number of hops
     cnn.graph_wos(hops=2)

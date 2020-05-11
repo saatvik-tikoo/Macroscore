@@ -14,11 +14,12 @@ import copy
 import pickle
 
 class Model:
-    def __init__(self, label_type, neural_model, fileName):
+    def __init__(self, label_type, neural_model, fileName, folds=10):
         self.label_type = label_type
         self.neural_model = neural_model
         self.fileName = fileName
         self.df = None
+        self.folds = folds
 
     def __score_model__(self, X_train, X_test, y_train, y_test, clf):
         clf.fit(X_train, y_train)
@@ -65,9 +66,9 @@ class Model:
         if self.label_type == 'pvalue.label':
             self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'Meta.analysis.significant'], axis=1)
         elif self.label_type == 'O.within.CI.R':
-            self.df = self.df.drop(['P.value.R', 'Direction.R', 'Meta.analysis.significant', 'pvalue.label'], axis=1)
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'Meta.analysis.significant'], axis=1)
         elif self.label_type == 'Meta.analysis.significant':
-            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R', 'pvalue.label'], axis=1)
+            self.df = self.df.drop(['P.value.R', 'Direction.R', 'O.within.CI.R'], axis=1)
 
         cols_drop = {'DOI', '1st.author.O', 'Senior.author.O', 'Study.Title.O', 'Unnamed: 0', 'Unnamed: 0.1', 'Volume.O'}
         cols_total = set(self.df.columns)
@@ -103,72 +104,16 @@ class Model:
         pandas.set_option('display.max_rows', final_features.shape[0] + 1)
         return final_features
 
-    def get_random_kfolds(self, train_set_size=0.9, seed=0, authors=None):
-        if authors is None:
-            return
-        df = self.df.copy()
-        train_set, test_set = pandas.DataFrame(columns=list(df.columns)), pandas.DataFrame(columns=list(df.columns))
-        while len(train_set) <= self.df.shape[0] * train_set_size and len(authors) > 0 and df.shape[0] > 0:
-            np.random.seed(seed)
-            author = authors[np.random.randint(0, len(authors))]
-            temp_df = df.loc[df['Authors.O'].str.contains(author, case=False)]
-            train_set = pandas.concat([train_set, temp_df], ignore_index=True)
-            authors.remove(author)
-
-            # remove all the rows from df that have been added to the new set
-            df.drop(df[df['Authors.O'].str.contains(author, case=False)].index, inplace=True)
-
-            if test_set.shape[0] <= self.df.shape[0] * (1 - train_set_size) and len(authors) > 0 and df.shape[0] > 0:
-                np.random.seed(seed)
-                author = authors[np.random.randint(0, len(authors))]
-                temp_df = df.loc[df['Authors.O'].str.contains(author, case=False)]
-                test_set = pandas.concat([test_set, temp_df], ignore_index=True)
-                authors.remove(author)
-
-                # remove all the rows from df that have been added to the new set
-                df.drop(df[df['Authors.O'].str.contains(author, case=False)].index, inplace=True)
-
-        train_set = train_set.drop(['Authors.O'], axis=1)
-        test_set = test_set.drop(['Authors.O'], axis=1)
+    def train_test_cv_split(self, index):
+        test_set = self.df.loc[self.df['Fold_Id'] == index]
+        train_set = self.df.loc[self.df.index.difference(test_set.index)]
         return train_set, test_set
 
     def modelling(self, best_features):
         self.df = self.df.drop(['Authors.O'], axis=1)
-        X = self.df[best_features]
-        y = self.df[self.label_type]
-        skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
-
         gnb = GaussianNB()
-        neigh = KNeighborsClassifier(n_neighbors=6, p=3, weights='uniform')
-        forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=5, max_features='auto', max_depth=10,
-                                                 min_samples_split=2, min_samples_leaf=1, bootstrap=True)
-        print("Cross Validation Score of Naive Bayes is: %.2f" % np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
-        print("Cross Validation Score of KNN is: %.2f" % np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
-        print("Cross Validation Score of Random Forest is: %.2f" % np.mean(cross_val_score(forest, X, y, cv=skf, n_jobs=1)))
-
-        if self.neural_model:
-            acc_arr = []
-            model = keras.Sequential([
-                keras.layers.Dense(16, input_dim=X.shape[1], activation='sigmoid'),
-                keras.layers.Dense(8, activation='sigmoid'),
-                keras.layers.Dense(16, activation='sigmoid'),
-                keras.layers.Dense(8, activation='sigmoid'),
-                keras.layers.Dense(1, activation='sigmoid')
-            ])
-            for train_index, test_index in skf.split(X, y):
-                X_train, X_test = X.iloc[train_index], X.iloc[test_index]
-                y_train, y_test = y.iloc[train_index], y.iloc[test_index]
-                model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-                model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
-                _, accuracy = model.evaluate(X_test, y_test)
-                acc_arr.append(accuracy)
-            print('Accuracy of this neural network model is: %.2f' % np.mean(acc_arr))
-            print(acc_arr)
-
-    def modelling_custom_kfolds(self, best_features):
-        gnb = GaussianNB()
-        neigh = KNeighborsClassifier(n_neighbors=10, p=2, weights='uniform')
-        forest = ensemble.RandomForestClassifier(n_estimators=100, max_depth=7, random_state=0, bootstrap=True)
+        neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
+        forest = ensemble.RandomForestClassifier(n_estimators=100, max_depth=4, random_state=0, bootstrap=True)
         model = None
         if self.neural_model:
             model = keras.Sequential([
@@ -179,15 +124,9 @@ class Model:
                 keras.layers.Dense(1, activation='sigmoid')
             ])
         result = defaultdict(list)
-        authors = []
-        for au in list(self.df['Authors.O']):
-            for j in au.split(','):
-                author = j.strip().lower()
-                if author not in authors:
-                    authors.append(author)
-        for idx in range(10):
-            print('Getting {} set '.format(idx + 1))
-            train_set, test_set = self.get_random_kfolds(train_set_size=0.8, seed=idx, authors=copy.deepcopy(authors))
+        for idx in range(self.folds):
+            train_set, test_set = self.train_test_cv_split(i + 1)
+
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
             y_train = y_train.astype('int')
@@ -220,24 +159,12 @@ class Model:
         if self.neural_model:
             print("Accuracy of Neural Network is: %0.2f" % np.mean(result['neuralNetwork']))
 
-        print('-----Storing Models-----')
-        f = open('Covid/data/models.pkl', 'wb')
-        pickle.dump(gnb, f)
-        pickle.dump(neigh, f)
-        pickle.dump(forest, f)
-        f.close()
-
     def tuning_hyperparameters(self, best_features):
         res_best = defaultdict(list)
-        authors = []
-        for au in list(self.df['Authors.O']):
-            for j in au.split(','):
-                author = j.strip().lower()
-                if author not in authors:
-                    authors.append(author)
-        for idx in range(10):
+
+        for idx in range(self.folds):
             print('\n----------Round {}----------'.format(idx + 1))
-            train_set, test_set = self.get_random_kfolds(train_set_size=0.8, seed=idx, authors=copy.deepcopy(authors))
+            train_set, test_set = self.train_test_cv_split(i + 1)
 
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
@@ -259,13 +186,12 @@ class Model:
             res_best['knn'].append(final_val)
 
             result = defaultdict(list)
-            for n_estimators in range(2, 11):
-                for max_depth in range(2, 11):
-                    forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=n_estimators, max_depth=max_depth,
-                                                             bootstrap=True)
-                    forest.fit(X_train, y_train)
-                    forest_pred = forest.predict(X_test)
-                    result[(n_estimators, max_depth)].append(np.round(mx.f1_score(y_test, forest_pred), 2))
+            for max_depth in range(2, 11):
+                forest = ensemble.RandomForestClassifier(random_state=0, n_estimators=100, max_depth=max_depth,
+                                                         bootstrap=True)
+                forest.fit(X_train, y_train)
+                forest_pred = forest.predict(X_test)
+                result[(100, max_depth)].append(np.round(mx.f1_score(y_test, forest_pred), 2))
             final_val = max(result.items(), key=lambda x: x[1])
             print("Accuracy of Random forest is: {}".format(final_val))
             res_best['forest'].append(final_val)
@@ -288,29 +214,44 @@ class Model:
         self.__remove_unusable_features__()
         self.__get_baseline__()
 
+def mergeAllFeatures(f_read, f_write):
+
+    mscore_t = Model('Meta.analysis.significant', neural_model=False, fileName=f_read[0])
+    mscore_t.get_data()
+    features_t = mscore_t.select_best_features_chi2()
+    b_features_t = list(features_t['Specs'])[: 10]
+    res = mscore_t.df[b_features_t]
+    res = pandas.concat([res, mscore_t.df[['DOI', 'P.value.R', 'Direction.R', 'O.within.CI.R', 'Meta.analysis.significant', 'Authors.O']]], axis=1)
+
+    for f_idx in range(1, len(f_read)):
+        mscore_t = Model('Meta.analysis.significant', neural_model=False, fileName=f_read[f_idx])
+        mscore_t.get_data()
+        features_t = mscore_t.select_best_features_chi2()
+        b_features_t = list(features_t['Specs'])[: 10]
+        res = pandas.concat([res, mscore_t.df[b_features_t]], axis=1)
+    res.to_excel(f_write)
+    print(res.columns)
+
 
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    path = 'data/'
-    files = [path + 'final_references_mag_data.xlsx']
-    # full_df = pandas.DataFrame()
+    files = ['data/final_references_network_2hops_wos_synthetic_1.xlsx',
+             'data/final_references_network_2hops_mag_synthetic_1.xlsx',
+             'data/final_citations_network_2hops_mag_synthetic_1.xlsx',
+             'data/final_references_network_2hops_wos_synthetic_10.xlsx',
+             'data/final_references_network_2hops_mag_synthetic_10.xlsx',
+             'data/final_citations_network_2hops_mag_synthetic_10.xlsx',
+             # 'data/final_best_features_synthetic_1.xlsx',
+             # 'data/final_best_features_synthetic_10.xlsx'
+             ]
+
+    # mergeAllFeatures(files[:3], 'data/final_best_features_synthetic_1.xlsx')
+    # mergeAllFeatures(files[3:], 'data/final_best_features_synthetic_10.xlsx')
+
     for i in range(len(files)):
         print('----------------Results for {} file----------------'.format(files[i].split('.')[0]))
         mscore = Model(all_labels[2], neural_model=False, fileName=files[i])
         mscore.get_data()
         features = mscore.select_best_features_chi2()
         b_features = list(features['Specs'])[: 10]
-        # mscore.modelling(b_features)
-        mscore.modelling_custom_kfolds(b_features)
-
-        # mscore.tuning_hyperparameters(b_features)
-
-        # df_temp = pandas.read_excel(files[i], encoding='ansi')
-        # if i == 0:
-        #     full_df = pandas.concat([full_df, df_temp[['DOI', 'P.value.R', 'Direction.R', 'O.within.CI.R',
-        #                                                'Meta.analysis.significant', 'pvalue.label',
-        #                                                'Authors.O']]], axis=1)
-        #
-        # full_df = pandas.concat([full_df, df_temp[b_features]], axis=1)
-    # full_df.to_excel('data/final_bestfeatures_data.xlsx')
-
+        mscore.modelling(b_features)

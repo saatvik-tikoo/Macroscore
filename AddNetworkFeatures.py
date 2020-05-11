@@ -14,7 +14,7 @@ class NetworkFetaures:
         self.graph_type = graph_type
 
     def get_data(self):
-        self.df = pd.read_excel('data/new_data.xlsx', encoding='ansi', )
+        self.df = pd.read_excel('data/new_data.xlsx', encoding='ansi')
 
     def addNetworkFeatures(self):
         with open(self.file, 'r') as f_read:
@@ -57,12 +57,21 @@ class NetworkFetaures:
 
 if __name__ == '__main__':
     # Set a proper file name and graph_type = 'wos' or 'mag_c' or 'mag_r'
-    input_file = ['data/node2vec_references_network_2hops_wos.emb', 'data/node2vec_references_network_2hops_mag.emb',
-                  'data/node2vec_citations_network_2hops_mag.emb']
-    output_file = ['data/final_references_wos_data.xlsx', 'data/final_references_mag_data.xlsx',
-                   'data/final_citations_mag_data.xlsx']
-    graph = ['wos', 'mag_r', 'mag_c']
-    for i in range(3):
+    input_file = ['data/node2vec_references_network_2hops_wos_synthetic_1.emb',
+                  'data/node2vec_references_network_2hops_wos_synthetic_10.emb',
+                  'data/node2vec_references_network_2hops_mag_synthetic_1.emb',
+                  'data/node2vec_references_network_2hops_mag_synthetic_10.emb',
+                  'data/node2vec_citations_network_2hops_mag_synthetic_1.emb',
+                  'data/node2vec_citations_network_2hops_mag_synthetic_10.emb']
+
+    output_file = ['data/final_references_network_2hops_wos_synthetic_1.xlsx',
+                   'data/final_references_network_2hops_wos_synthetic_10.xlsx',
+                   'data/final_references_network_2hops_mag_synthetic_1.xlsx',
+                   'data/final_references_network_2hops_mag_synthetic_10.xlsx',
+                   'data/final_citations_network_2hops_mag_synthetic_1.xlsx',
+                   'data/final_citations_network_2hops_mag_synthetic_10.xlsx']
+    graph = ['wos', 'wos', 'mag_r', 'mag_r', 'mag_c', 'mag_c']
+    for i in range(6):
         cnn = NetworkFetaures(file=input_file[i], output=output_file[i], graph_type=graph[i])
         cnn.get_data()
         cnn.addNetworkFeatures()
