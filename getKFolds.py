@@ -27,7 +27,7 @@ def get_random_kfolds(df, authors, output, k, fold, visited):
                 get_random_kfolds(df, list(authors_new), output, k, fold, visited)
 
 def main():
-    data = pd.read_excel('data/new_data.xlsx', encoding='ansi')
+    data = pd.read_excel('data/KexuanFeatures.xlsx', encoding='ansi')
     data.dropna(inplace=True)
 
     authors = set()
@@ -70,7 +70,7 @@ def main():
 
     for obj in output:
         data.at[data.where((data['DOI'] == obj['Doi'])).dropna(subset=['DOI']).index, 'Fold_Id'] = obj['Fold']
-    data.to_excel('data/new_data.xlsx')
+    data.to_excel('data/KexuanFeatures.xlsx')
 
 
 if __name__ == '__main__':
