@@ -13,6 +13,7 @@ from matplotlib import pyplot as plt
 import copy
 import pickle
 
+
 class Model:
     def __init__(self, label_type, neural_model, fileName, folds=10):
         self.label_type = label_type
@@ -112,8 +113,8 @@ class Model:
     def modelling(self, best_features):
         self.df = self.df.drop(['Authors.O'], axis=1)
         gnb = GaussianNB()
-        neigh = KNeighborsClassifier(n_neighbors=6, p=2, weights='uniform')
-        forest = ensemble.RandomForestClassifier(n_estimators=100, max_depth=4, random_state=0, bootstrap=True)
+        neigh = KNeighborsClassifier(n_neighbors=5, p=2, weights='uniform')
+        forest = ensemble.RandomForestClassifier(n_estimators=100, max_depth=3, random_state=0, bootstrap=True)
         model = None
         if self.neural_model:
             model = keras.Sequential([
@@ -125,7 +126,7 @@ class Model:
             ])
         result = defaultdict(list)
         for idx in range(self.folds):
-            train_set, test_set = self.train_test_cv_split(i + 1)
+            train_set, test_set = self.train_test_cv_split(idx + 1)
 
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
@@ -164,7 +165,7 @@ class Model:
 
         for idx in range(self.folds):
             print('\n----------Round {}----------'.format(idx + 1))
-            train_set, test_set = self.train_test_cv_split(i + 1)
+            train_set, test_set = self.train_test_cv_split(idx + 1)
 
             X_train = train_set[best_features]
             y_train = train_set[self.label_type]
@@ -214,8 +215,40 @@ class Model:
         self.__remove_unusable_features__()
         self.__get_baseline__()
 
-def mergeAllFeatures(f_read, f_write):
+    def modelling2(self, best_features):
+        self.df = self.df.drop(['Authors.O'], axis=1)
+        X = self.df[best_features]
+        y = self.df[self.label_type]
+        skf = StratifiedKFold(n_splits=10, shuffle=True, random_state=0)
 
+        gnb = GaussianNB()
+        neigh = KNeighborsClassifier(n_neighbors=11, p=3, weights='uniform')
+        forest = ensemble.RandomForestClassifier(random_state=0)
+        print("Cross Validation Score of Naive Bayes is: %.2f" % np.mean(cross_val_score(gnb, X, y, cv=skf, n_jobs=1)))
+        print("Cross Validation Score of KNN is: %.2f" % np.mean(cross_val_score(neigh, X, y, cv=skf, n_jobs=1)))
+        print("Cross Validation Score of Random Forest is: %.2f" % np.mean(cross_val_score(forest, X, y, cv=skf, n_jobs=1)))
+
+        if self.neural_model:
+            acc_arr = []
+            model = keras.Sequential([
+                keras.layers.Dense(16, input_dim=X.shape[1], activation='sigmoid'),
+                keras.layers.Dense(8, activation='sigmoid'),
+                keras.layers.Dense(16, activation='sigmoid'),
+                keras.layers.Dense(8, activation='sigmoid'),
+                keras.layers.Dense(1, activation='sigmoid')
+            ])
+            for train_index, test_index in skf.split(X, y):
+                X_train, X_test = X.iloc[train_index], X.iloc[test_index]
+                y_train, y_test = y.iloc[train_index], y.iloc[test_index]
+                model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+                model.fit(X_train, y_train, epochs=150, batch_size=10, verbose=0)
+                _, accuracy = model.evaluate(X_test, y_test)
+                acc_arr.append(accuracy)
+            print('Accuracy of this neural network model is: %.2f' % np.mean(acc_arr))
+            print(acc_arr)
+
+
+def mergeAllFeatures(f_read, f_write):
     mscore_t = Model('Meta.analysis.significant', neural_model=False, fileName=f_read[0])
     mscore_t.get_data()
     features_t = mscore_t.select_best_features_chi2()
@@ -235,12 +268,19 @@ def mergeAllFeatures(f_read, f_write):
 
 if __name__ == '__main__':
     all_labels = ['pvalue.label', 'O.within.CI.R', 'Meta.analysis.significant']
-    files = ['data/final_references_network_2hops_wos_synthetic_1.xlsx',
-             'data/final_references_network_2hops_mag_synthetic_1.xlsx',
-             'data/final_citations_network_2hops_mag_synthetic_1.xlsx',
-             'data/final_references_network_2hops_wos_synthetic_10.xlsx',
-             'data/final_references_network_2hops_mag_synthetic_10.xlsx',
-             'data/final_citations_network_2hops_mag_synthetic_10.xlsx',
+    files = ['data/new_data.xlsx'
+        # 'data/finalfeatures_citations_network_2_hops_mag_1_syntheticEdges_with_NoOracle.xlsx',
+             # 'data/finalfeatures_citations_network_2_hops_mag_1_syntheticEdges_with_Oracle.xlsx',
+             # 'data/finalfeatures_citations_network_2_hops_mag_10_syntheticEdges_with_NoOracle.xlsx',
+             # 'data/finalfeatures_citations_network_2_hops_mag_10_syntheticEdges_with_Oracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_mag_1_syntheticEdges_with_NoOracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_mag_1_syntheticEdges_with_Oracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_mag_10_syntheticEdges_with_NoOracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_mag_10_syntheticEdges_with_Oracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_wos_1_syntheticEdges_with_NoOracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_wos_1_syntheticEdges_with_Oracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_wos_10_syntheticEdges_with_NoOracle.xlsx',
+             # 'data/finalfeatures_references_network_2_hops_wos_10_syntheticEdges_with_Oracle.xlsx'
              # 'data/final_best_features_synthetic_1.xlsx',
              # 'data/final_best_features_synthetic_10.xlsx'
              ]
@@ -254,4 +294,4 @@ if __name__ == '__main__':
         mscore.get_data()
         features = mscore.select_best_features_chi2()
         b_features = list(features['Specs'])[: 10]
-        mscore.modelling(b_features)
+        mscore.modelling2(b_features)

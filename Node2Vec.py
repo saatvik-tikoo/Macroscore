@@ -120,18 +120,31 @@ def read_graph(file_name):
 
 if __name__ == "__main__":
     # Add the input and output files here in the same sequence.
-    input_file = ['data/references_network_2hops_wos_1.gpickle',
-                  'data/references_network_2hops_wos_10.gpickle',
-                  'data/references_network_2hops_mag_synthetic_1.gpickle',
-                  'data/references_network_2hops_mag_synthetic_10.gpickle',
-                  'data/citations_network_2hops_mag_synthetic_1.gpickle',
-                  'data/citations_network_2hops_mag_synthetic_10.gpickle']
-    output_file = ['data/node2vec_references_network_2hops_wos_synthetic_1.emb',
-                   'data/node2vec_references_network_2hops_wos_synthetic_10.emb',
-                   'data/node2vec_references_network_2hops_mag_synthetic_1.emb',
-                   'data/node2vec_references_network_2hops_mag_synthetic_10.emb',
-                   'data/node2vec_citations_network_2hops_mag_synthetic_1.emb',
-                   'data/node2vec_citations_network_2hops_mag_synthetic_10.emb'
+    input_file = ['data/citations_network_2_hops_mag_1_syntheticEdges_with_NoOracle.gpickle',
+                  'data/citations_network_2_hops_mag_1_syntheticEdges_with_Oracle.gpickle',
+                  'data/citations_network_2_hops_mag_10_syntheticEdges_with_NoOracle.gpickle',
+                  'data/citations_network_2_hops_mag_10_syntheticEdges_with_Oracle.gpickle',
+                  'data/references_network_2_hops_mag_1_syntheticEdges_with_NoOracle.gpickle',
+                  'data/references_network_2_hops_mag_1_syntheticEdges_with_Oracle.gpickle',
+                  'data/references_network_2_hops_mag_10_syntheticEdges_with_NoOracle.gpickle',
+                  'data/references_network_2_hops_mag_10_syntheticEdges_with_Oracle.gpickle',
+                  'data/references_network_2_hops_wos_1_syntheticEdges_with_NoOracle.gpickle',
+                  'data/references_network_2_hops_wos_1_syntheticEdges_with_Oracle.gpickle',
+                  'data/references_network_2_hops_wos_10_syntheticEdges_with_NoOracle.gpickle',
+                  'data/references_network_2_hops_wos_10_syntheticEdges_with_Oracle.gpickle',
+                  ]
+    output_file = ['data/node2vec_citations_network_2_hops_mag_1_syntheticEdges_with_NoOracle.emb',
+                   'data/node2vec_citations_network_2_hops_mag_1_syntheticEdges_with_Oracle.emb',
+                   'data/node2vec_citations_network_2_hops_mag_10_syntheticEdges_with_NoOracle.emb',
+                   'data/node2vec_citations_network_2_hops_mag_10_syntheticEdges_with_Oracle.emb',
+                   'data/node2vec_references_network_2_hops_mag_1_syntheticEdges_with_NoOracle.emb',
+                   'data/node2vec_references_network_2_hops_mag_1_syntheticEdges_with_Oracle.emb',
+                   'data/node2vec_references_network_2_hops_mag_10_syntheticEdges_with_NoOracle.emb',
+                   'data/node2vec_references_network_2_hops_mag_10_syntheticEdges_with_Oracle.emb',
+                   'data/node2vec_references_network_2_hops_wos_1_syntheticEdges_with_NoOracle.emb',
+                   'data/node2vec_references_network_2_hops_wos_1_syntheticEdges_with_Oracle.emb',
+                   'data/node2vec_references_network_2_hops_wos_10_syntheticEdges_with_NoOracle.emb',
+                   'data/node2vec_references_network_2_hops_wos_10_syntheticEdges_with_Oracle.emb',
                    ]
     for i in range(len(input_file)):
         print('----------Getting Features for file ', i + 1, '----------')

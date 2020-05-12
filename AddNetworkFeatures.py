@@ -57,21 +57,35 @@ class NetworkFetaures:
 
 if __name__ == '__main__':
     # Set a proper file name and graph_type = 'wos' or 'mag_c' or 'mag_r'
-    input_file = ['data/node2vec_references_network_2hops_wos_synthetic_1.emb',
-                  'data/node2vec_references_network_2hops_wos_synthetic_10.emb',
-                  'data/node2vec_references_network_2hops_mag_synthetic_1.emb',
-                  'data/node2vec_references_network_2hops_mag_synthetic_10.emb',
-                  'data/node2vec_citations_network_2hops_mag_synthetic_1.emb',
-                  'data/node2vec_citations_network_2hops_mag_synthetic_10.emb']
+    input_file = ['data/node2vec_citations_network_2_hops_mag_1_syntheticEdges_with_NoOracle.emb',
+                  'data/node2vec_citations_network_2_hops_mag_1_syntheticEdges_with_Oracle.emb',
+                  'data/node2vec_citations_network_2_hops_mag_10_syntheticEdges_with_NoOracle.emb',
+                  'data/node2vec_citations_network_2_hops_mag_10_syntheticEdges_with_Oracle.emb',
+                  'data/node2vec_references_network_2_hops_mag_1_syntheticEdges_with_NoOracle.emb',
+                  'data/node2vec_references_network_2_hops_mag_1_syntheticEdges_with_Oracle.emb',
+                  'data/node2vec_references_network_2_hops_mag_10_syntheticEdges_with_NoOracle.emb',
+                  'data/node2vec_references_network_2_hops_mag_10_syntheticEdges_with_Oracle.emb',
+                  'data/node2vec_references_network_2_hops_wos_1_syntheticEdges_with_NoOracle.emb',
+                  'data/node2vec_references_network_2_hops_wos_1_syntheticEdges_with_Oracle.emb',
+                  'data/node2vec_references_network_2_hops_wos_10_syntheticEdges_with_NoOracle.emb',
+                  'data/node2vec_references_network_2_hops_wos_10_syntheticEdges_with_Oracle.emb',
+                  ]
 
-    output_file = ['data/final_references_network_2hops_wos_synthetic_1.xlsx',
-                   'data/final_references_network_2hops_wos_synthetic_10.xlsx',
-                   'data/final_references_network_2hops_mag_synthetic_1.xlsx',
-                   'data/final_references_network_2hops_mag_synthetic_10.xlsx',
-                   'data/final_citations_network_2hops_mag_synthetic_1.xlsx',
-                   'data/final_citations_network_2hops_mag_synthetic_10.xlsx']
-    graph = ['wos', 'wos', 'mag_r', 'mag_r', 'mag_c', 'mag_c']
-    for i in range(6):
+    output_file = ['data/finalfeatures_citations_network_2_hops_mag_1_syntheticEdges_with_NoOracle.xlsx',
+                   'data/finalfeatures_citations_network_2_hops_mag_1_syntheticEdges_with_Oracle.xlsx',
+                   'data/finalfeatures_citations_network_2_hops_mag_10_syntheticEdges_with_NoOracle.xlsx',
+                   'data/finalfeatures_citations_network_2_hops_mag_10_syntheticEdges_with_Oracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_mag_1_syntheticEdges_with_NoOracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_mag_1_syntheticEdges_with_Oracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_mag_10_syntheticEdges_with_NoOracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_mag_10_syntheticEdges_with_Oracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_wos_1_syntheticEdges_with_NoOracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_wos_1_syntheticEdges_with_Oracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_wos_10_syntheticEdges_with_NoOracle.xlsx',
+                   'data/finalfeatures_references_network_2_hops_wos_10_syntheticEdges_with_Oracle.xlsx'
+                   ]
+    graph = ['mag_c', 'mag_c', 'mag_c', 'mag_c', 'mag_r', 'mag_r', 'mag_r', 'mag_r', 'wos', 'wos', 'wos', 'wos']
+    for i in range(len(graph)):
         cnn = NetworkFetaures(file=input_file[i], output=output_file[i], graph_type=graph[i])
         cnn.get_data()
         cnn.addNetworkFeatures()
